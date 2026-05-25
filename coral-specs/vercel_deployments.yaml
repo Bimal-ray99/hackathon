@@ -1,0 +1,78 @@
+name: vercel_deployments
+version: "1.0.0"
+description: "Query Vercel deployment history as SQL tables. Enables JOINs between deployments and error spikes."
+
+auth:
+  type: bearer
+  env: VERCEL_TOKEN
+
+base_url: https://api.vercel.com
+
+tables:
+  deployments:
+    endpoint: /v6/deployments
+    pagination:
+      type: cursor
+      param: until
+      field: pagination.next
+    columns:
+      - name: uid
+        type: VARCHAR
+        primary_key: true
+      - name: name
+        type: VARCHAR
+      - name: url
+        type: VARCHAR
+      - name: created_at
+        type: TIMESTAMP
+        source: createdAt
+        transform: epoch_ms
+      - name: ready_at
+        type: TIMESTAMP
+        source: ready
+        transform: epoch_ms
+      - name: state
+        type: VARCHAR
+      - name: target
+        type: VARCHAR
+        description: "production | preview | development"
+      - name: git_sha
+        type: VARCHAR
+        source: meta.githubCommitSha
+      - name: git_branch
+        type: VARCHAR
+        source: meta.githubCommitRef
+      - name: git_message
+        type: VARCHAR
+        source: meta.githubCommitMessage
+      - name: creator_email
+        type: VARCHAR
+        source: creator.email
+      - name: team_id
+        type: VARCHAR
+        source: teamId
+
+  deployment_checks:
+    endpoint: /v1/deployments/{deployment_id}/checks
+    path_params:
+      - deployment_id
+    columns:
+      - name: id
+        type: VARCHAR
+        primary_key: true
+      - name: deployment_id
+        type: VARCHAR
+      - name: name
+        type: VARCHAR
+      - name: status
+        type: VARCHAR
+      - name: conclusion
+        type: VARCHAR
+      - name: started_at
+        type: TIMESTAMP
+        source: startedAt
+        transform: epoch_ms
+      - name: completed_at
+        type: TIMESTAMP
+        source: completedAt
+        transform: epoch_ms
