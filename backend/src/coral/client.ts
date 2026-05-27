@@ -51,6 +51,9 @@ export class CoralClient {
       } else if (source === 'launchdarkly') {
         type = 'flag_change';
         description = `Flag ${row.title} was changed`;
+      } else if (source === 'sentry') {
+        type = 'error_spike';
+        description = `Sentry Issue: ${row.title}`;
       }
 
       return {

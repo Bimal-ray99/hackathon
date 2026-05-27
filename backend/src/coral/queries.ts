@@ -17,7 +17,12 @@ SELECT 'launchdarkly' AS source, name AS title, creation_date AS timestamp
 FROM launchdarkly.feature_flags 
 WHERE project_key = 'default' 
 
+UNION ALL
+
+SELECT 'sentry' AS source, title, first_seen AS timestamp
+FROM sentry.issues
+
 ORDER BY timestamp DESC
-LIMIT 10;`;
+LIMIT 15;`;
 
 export const IMPACT_QUERY = `SELECT 1;`; // Disabled until Stripe is integrated
