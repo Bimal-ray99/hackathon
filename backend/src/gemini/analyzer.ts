@@ -1,44 +1,34 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { IncidentAnalysis } from '../types';
 
-const SYSTEM_PROMPT = `You are PulseIQ, an organizational intelligence AI. Given cross-source incident data from engineering and business tools (joined via Coral SQL), explain what went wrong in plain English.
+const SYSTEM_PROMPT = `You are PulseIQ, an organizational intelligence AI. Given incident data from engineering tools (joined via Coral SQL), explain what happened in plain English.
+
+Currently, we only have LaunchDarkly data. Explain which flag was toggled based on the data. Do NOT mention MRR, Support Tickets, or Sentry errors because they are not integrated yet.
 
 Always respond with valid JSON matching this exact shape:
 {
-  "summary": "One impactful sentence with specific numbers",
-  "root_cause": "Technical explanation of what caused the incident",
-  "recommended_action": "Specific next step to prevent recurrence",
+  "summary": "One impactful sentence about the feature flag change",
+  "root_cause": "Technical explanation of the flag state",
+  "recommended_action": "Specific next step to monitor or revert",
   "confidence": "high" | "medium" | "low"
-}
-
-Be specific. Include numbers (error counts, MRR, customer counts). Reference the actual tool names (LaunchDarkly, Sentry, Stripe). Make judges say "oh damn."`;
+}`;
 
 export class GeminiAnalyzer {
-  private genAI: GoogleGenerativeAI | null;
-  private useSeed: boolean;
+  private genAI: GoogleGenerativeAI;
 
   constructor() {
-    this.useSeed = !process.env.GEMINI_API_KEY;
-    this.genAI = process.env.GEMINI_API_KEY
-      ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-      : null;
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is missing. Live integration requires Gemini.');
+    }
+    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
 
   async analyze(
     question: string,
     data: IncidentAnalysis
   ): Promise<Pick<IncidentAnalysis, 'summary' | 'root_cause' | 'recommended_action' | 'confidence'>> {
-    if (this.useSeed || !this.genAI) {
-      return {
-        summary: data.summary,
-        root_cause: data.root_cause,
-        recommended_action: data.recommended_action,
-        confidence: data.confidence
-      };
-    }
-
     const model = this.genAI.getGenerativeModel({
-      model: 'gemini-1.5-pro',
+      model: 'gemini-2.5-flash',
       generationConfig: { responseMimeType: 'application/json' }
     });
 
@@ -46,19 +36,8 @@ export class GeminiAnalyzer {
 
 User question: "${question}"
 
-Coral cross-source JOIN data:
-${JSON.stringify({
-  flag_triggered: 'new-upload-flow',
-  flag_enabled_at: data.timeline[0]?.timestamp,
-  error_count: 847,
-  affected_customers: data.affected_customers.length,
-  mrr_at_risk: data.mrr_at_risk,
-  support_tickets: data.support_ticket_count,
-  sources: data.sources_queried
-}, null, 2)}
-
-Timeline summary:
-${data.timeline.map(e => `${e.timestamp} [${e.source}] ${e.title}`).join('\n')}`;
+Coral query data:
+${JSON.stringify(data.timeline, null, 2)}`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();
@@ -66,12 +45,7 @@ ${data.timeline.map(e => `${e.timestamp} [${e.source}] ${e.title}`).join('\n')}`
     try {
       return JSON.parse(text) as Pick<IncidentAnalysis, 'summary' | 'root_cause' | 'recommended_action' | 'confidence'>;
     } catch {
-      return {
-        summary: data.summary,
-        root_cause: data.root_cause,
-        recommended_action: data.recommended_action,
-        confidence: 'medium'
-      };
+      throw new Error('Failed to parse AI response as JSON');
     }
   }
 }
