@@ -9,6 +9,9 @@ import { timelineRouter } from './routes/timeline';
 import { impactRouter } from './routes/impact';
 import { streamRouter } from './routes/stream';
 import { autopilotRouter } from './routes/autopilot';
+import { remediationRouter } from './routes/remediation';
+import { flagsRouter } from './routes/flags';
+import { pulseRouter } from './routes/pulse';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -22,6 +25,9 @@ app.use('/api/timeline', timelineRouter);
 app.use('/api/impact', impactRouter);
 app.use('/api/stream', streamRouter);
 app.use('/api/autopilot', autopilotRouter);
+app.use('/api/remediation', remediationRouter);
+app.use('/api/flags', flagsRouter);
+app.use('/api/pulse', pulseRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 

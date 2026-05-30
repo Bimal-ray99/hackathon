@@ -10,7 +10,21 @@ import { ChatInterface } from '@/components/ChatInterface';
 import { IncidentTimeline } from '@/components/IncidentTimeline';
 import { ImpactCard } from '@/components/ImpactCard';
 import { QueryViewer } from '@/components/QueryViewer';
-import { AnalysisResponse, AnomalySignal, Incident, getIncidents, streamAnalyze, simulateAnomaly } from '@/lib/api';
+import { CausalChainGraph } from '@/components/CausalChainGraph';
+import { RemediationPanel } from '@/components/RemediationPanel';
+import { FlagSafetyScore } from '@/components/FlagSafetyScore';
+import { OrgPulseFeed } from '@/components/OrgPulseFeed';
+import { AnalysisResponse, AnomalySignal, Incident, TimelineEvent, getIncidents, streamAnalyze, simulateAnomaly } from '@/lib/api';
+
+function extractFlagKey(timeline: TimelineEvent[]): string {
+  for (const e of timeline) {
+    if (e.source === 'launchdarkly') {
+      const meta = e.metadata as Record<string, unknown> | undefined;
+      if (meta?.flag_key) return String(meta.flag_key);
+    }
+  }
+  return 'new-upload-flow';
+}
 
 const SOURCE_ICON: Record<string, React.ReactNode> = {
   launchdarkly: <TbFlag className="w-3 h-3" />,
@@ -400,6 +414,11 @@ export default function Home() {
             </div>
           )}
 
+          {/* Org Pulse Feed — always on */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <OrgPulseFeed />
+          </div>
+
           {/* Chat */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-center gap-2 mb-5">
@@ -418,6 +437,27 @@ export default function Home() {
           {analysis && !loading && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <IncidentTimeline events={analysis.timeline} />
+            </div>
+          )}
+
+          {/* Causal Chain */}
+          {analysis && !loading && analysis.timeline.length > 1 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <CausalChainGraph events={analysis.timeline} />
+            </div>
+          )}
+
+          {/* Flag Safety Score */}
+          {analysis && !loading && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <FlagSafetyScore flagKey={extractFlagKey(analysis.timeline)} />
+            </div>
+          )}
+
+          {/* Remediation */}
+          {analysis && !loading && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <RemediationPanel analysis={analysis} />
             </div>
           )}
 
