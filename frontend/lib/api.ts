@@ -72,9 +72,10 @@ export function streamAnalyze(
   question: string,
   onEvent: (event: StreamEvent) => void,
   onDone: (result: AnalysisResponse) => void,
-  onError: (err: string) => void
+  onError: (err: string) => void,
+  seed = true
 ): () => void {
-  const url = `${BASE}/api/stream?question=${encodeURIComponent(question)}`;
+  const url = `${BASE}/api/stream?question=${encodeURIComponent(question)}&seed=${seed}`;
   const es = new EventSource(url);
 
   const events = ['start', 'source_start', 'source_done', 'gemini_start', 'complete', 'error'];

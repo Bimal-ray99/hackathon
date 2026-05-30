@@ -12,6 +12,10 @@ import { autopilotRouter } from './routes/autopilot';
 import { remediationRouter } from './routes/remediation';
 import { flagsRouter } from './routes/flags';
 import { pulseRouter } from './routes/pulse';
+import { diagnosisRouter } from './routes/diagnosis';
+import { churnRouter } from './routes/churn';
+import { noiseRouter } from './routes/noise';
+import { setupMCPServer } from './mcp/server';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -28,8 +32,13 @@ app.use('/api/autopilot', autopilotRouter);
 app.use('/api/remediation', remediationRouter);
 app.use('/api/flags', flagsRouter);
 app.use('/api/pulse', pulseRouter);
+app.use('/api/diagnosis', diagnosisRouter);
+app.use('/api/churn', churnRouter);
+app.use('/api/noise', noiseRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+setupMCPServer(app);
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => console.log(`PulseIQ backend running on :${PORT}`));

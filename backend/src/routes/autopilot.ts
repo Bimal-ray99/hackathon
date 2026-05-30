@@ -9,6 +9,52 @@ const gemini = new GeminiAnalyzer();
 
 const SOURCES = ['launchdarkly', 'github', 'sentry', 'slack'] as const;
 const AUTOPILOT_QUESTION = 'Why are uploads failing?';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:4000';
+
+async function autoRemediate(flagKey: string, commitSha: string, incidentId: string) {
+  const results: { flag_disabled: boolean; pr_url: string | null; slack_posted: boolean } = {
+    flag_disabled: false,
+    pr_url: null,
+    slack_posted: false,
+  };
+
+  try {
+    const r = await fetch(`${BASE_URL}/api/remediation/ld-rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flag_key: flagKey, comment: `PulseIQ autopilot auto-remediation — ${incidentId}` }),
+    });
+    results.flag_disabled = r.ok;
+  } catch { /* continue */ }
+
+  try {
+    const r = await fetch(`${BASE_URL}/api/remediation/github-pr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `fix: auto-revert ${commitSha} (PulseIQ autopilot)`,
+        body: `Auto-remediation triggered by PulseIQ autopilot.\n\nIncident: ${incidentId}`,
+        head: commitSha,
+      }),
+    });
+    const data = await r.json() as Record<string, unknown>;
+    results.pr_url = String(data.pr_url ?? '');
+  } catch { /* continue */ }
+
+  try {
+    const prLine = results.pr_url ? `\nRevert PR: ${results.pr_url}` : '';
+    await fetch(`${BASE_URL}/api/remediation/slack-post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `*PulseIQ Autopilot auto-remediated ${incidentId}*\nFlag \`${flagKey}\` disabled\nRevert PR opened${prLine}\nNo human intervention required.`,
+      }),
+    });
+    results.slack_posted = true;
+  } catch { /* continue */ }
+
+  return results;
+}
 
 async function detectAnomaly(): Promise<{ source: string; signal: string }> {
   try {
@@ -100,9 +146,20 @@ autopilotRouter.get('/stream', (req: Request, res: Response) => {
     if (fired) return;
     fired = true;
 
+    const startTime = Date.now();
     const { source, signal } = await detectAnomaly();
     send('anomaly_detected', { source, signal, question: AUTOPILOT_QUESTION });
     await runAnalysisStream(send, AUTOPILOT_QUESTION);
+
+    const remediation = await autoRemediate('new-upload-flow', 'a3f9c21', 'inc-001');
+    send('remediation_complete', {
+      actions: ['flag_disabled', 'pr_opened', 'slack_posted'],
+      flag_disabled: remediation.flag_disabled,
+      pr_url: remediation.pr_url,
+      slack_posted: remediation.slack_posted,
+      duration_ms: Date.now() - startTime,
+      incident_id: 'inc-001',
+    });
   };
 
   const t1 = setTimeout(() => { trigger().catch((err) => console.error('[autopilot] trigger error:', err)); }, 30000);

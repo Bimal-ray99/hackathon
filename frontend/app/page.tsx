@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   SiGithub, SiSentry, SiSlack, SiStripe, SiIntercom
 } from 'react-icons/si';
-import { TbFlag, TbRadar } from 'react-icons/tb';
+import { TbFlag, TbRadar, TbDatabase, TbDatabaseOff } from 'react-icons/tb';
 import { RiUploadCloud2Line } from 'react-icons/ri';
 import { ChatInterface } from '@/components/ChatInterface';
 import { IncidentTimeline } from '@/components/IncidentTimeline';
@@ -14,6 +14,8 @@ import { CausalChainGraph } from '@/components/CausalChainGraph';
 import { RemediationPanel } from '@/components/RemediationPanel';
 import { FlagSafetyScore } from '@/components/FlagSafetyScore';
 import { OrgPulseFeed } from '@/components/OrgPulseFeed';
+import { DeepDiagnosisPanel } from '@/components/DeepDiagnosisPanel';
+import { SilentChurnPanel } from '@/components/SilentChurnPanel';
 import { AnalysisResponse, AnomalySignal, Incident, TimelineEvent, getIncidents, streamAnalyze, simulateAnomaly } from '@/lib/api';
 
 function extractFlagKey(timeline: TimelineEvent[]): string {
@@ -126,6 +128,7 @@ export default function Home() {
   const [autopilot, setAutopilot] = useState(false);
   const autopilotESRef = useRef<EventSource | null>(null);
   const [autopilotLabel, setAutopilotLabel] = useState<string | null>(null);
+  const [seedEnabled, setSeedEnabled] = useState(true);
 
   useEffect(() => {
     getIncidents().then(setIncidents).catch(() => {});
@@ -162,7 +165,8 @@ export default function Home() {
       },
       () => {
         setLoading(false);
-      }
+      },
+      seedEnabled
     );
   }
 
@@ -215,6 +219,14 @@ export default function Home() {
       setLoading(false);
     });
 
+    es.addEventListener('remediation_complete', (e: MessageEvent) => {
+      const data = JSON.parse(e.data) as { duration_ms: number; pr_url?: string; flag_disabled?: boolean };
+      const secs = (data.duration_ms / 1000).toFixed(1);
+      const pr = data.pr_url ? ` · PR opened` : '';
+      const flag = data.flag_disabled ? ' · flag disabled' : '';
+      setAutopilotLabel(`Auto-remediated in ${secs}s${flag}${pr} — zero human touch`);
+    });
+
     es.addEventListener('error', (e: Event) => {
       const msgEvent = e as MessageEvent;
       if (msgEvent.data) {
@@ -251,7 +263,8 @@ export default function Home() {
           setAnalysis(result);
           setLoading(false);
         },
-        () => setLoading(false)
+        () => setLoading(false),
+        seedEnabled
       );
     } catch {
       setLoading(false);
@@ -365,6 +378,18 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setSeedEnabled(s => !s)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                seedEnabled
+                  ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+                  : 'bg-slate-100 border-slate-200 text-slate-500 hover:border-slate-300'
+              }`}
+              title={seedEnabled ? 'Seed data on — click for live only' : 'Live only — click to enable seed fallback'}
+            >
+              {seedEnabled ? <TbDatabase className="w-3.5 h-3.5" /> : <TbDatabaseOff className="w-3.5 h-3.5" />}
+              {seedEnabled ? 'Seed' : 'Live'}
+            </button>
+            <button
               onClick={toggleAutopilot}
               disabled={loading}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
@@ -416,7 +441,7 @@ export default function Home() {
 
           {/* Org Pulse Feed — always on */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <OrgPulseFeed />
+            <OrgPulseFeed seedEnabled={seedEnabled} />
           </div>
 
           {/* Chat */}
@@ -450,9 +475,25 @@ export default function Home() {
           {/* Flag Safety Score */}
           {analysis && !loading && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <FlagSafetyScore flagKey={extractFlagKey(analysis.timeline)} />
+              <FlagSafetyScore flagKey={extractFlagKey(analysis.timeline)} seed={seedEnabled} />
             </div>
           )}
+
+          {/* Deep Diagnosis */}
+          {analysis && !loading && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <DeepDiagnosisPanel
+                flagKey={extractFlagKey(analysis.timeline)}
+                incidentId={analysis.incidentId}
+                seed={seedEnabled}
+              />
+            </div>
+          )}
+
+          {/* Silent Churn Detector */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <SilentChurnPanel seedEnabled={seedEnabled} />
+          </div>
 
           {/* Remediation */}
           {analysis && !loading && (

@@ -1,21 +1,28 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { IncidentAnalysis } from '../types';
 
+interface RagContext {
+  stackTraces: { title: string; culprit: string }[];
+  slackMessages: { text: string; ts?: string }[];
+  flagDetails: { key: string; description?: string; name?: string }[];
+  commitMessages: { message: string; author: string }[];
+}
+
 const SYSTEM_PROMPT = `You are PulseIQ, an organizational intelligence AI. You analyze cross-source incident data joined via Coral SQL across engineering and business tools.
 
-Given timeline data from multiple sources (LaunchDarkly, GitHub, Sentry, Slack, Stripe, Intercom), explain what went wrong in plain English.
+Given real data retrieved via Coral from multiple sources, explain what went wrong with surgical precision.
 
 Rules:
-- Be specific. Use exact timestamps, error counts, flag names from the data.
-- Connect cause to effect: "Flag X enabled at T1 → errors spiked at T2 → tickets opened at T3"
-- If data shows flag changes near error spikes, that IS the root cause.
-- Sound like a senior SRE explaining to a CEO, not a bot.
+- Cite specific data: exact error text, flag names, commit messages, Slack quotes from the rows provided.
+- Connect cause to effect: "Flag X enabled → sarah.chen's commit changed .getStream() to .stream() → TypeError in upload/handler.ts → 847 Enterprise errors"
+- Every claim must be traceable to a specific Coral row in the data below.
+- Sound like a senior SRE explaining to a CEO.
 
 Always respond with valid JSON:
 {
-  "summary": "One powerful sentence with specific numbers and cause-effect",
-  "root_cause": "2-3 sentences: what changed, what broke, why it broke",
-  "recommended_action": "Specific actionable next step",
+  "summary": "One powerful sentence with specific artifact names and cause-effect chain",
+  "root_cause": "2-3 sentences: cite exact error title, exact flag key, exact commit message",
+  "recommended_action": "3 specific steps citing actual artifacts from the data",
   "confidence": "high" | "medium" | "low"
 }`;
 
@@ -32,7 +39,8 @@ export class GeminiAnalyzer {
 
   async analyze(
     question: string,
-    data: IncidentAnalysis
+    data: IncidentAnalysis,
+    ragContext?: RagContext
   ): Promise<Pick<IncidentAnalysis, 'summary' | 'root_cause' | 'recommended_action' | 'confidence'>> {
     if (this.useSeed || !this.genAI) {
       return {
@@ -45,23 +53,41 @@ export class GeminiAnalyzer {
 
     const model = this.genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      generationConfig: { responseMimeType: 'application/json' }
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
     });
 
     const timelineSummary = data.timeline
       .map(e => `[${e.source.toUpperCase()}] ${e.timestamp}: ${e.title} — ${e.description}`)
       .join('\n');
 
-    const prompt = `${SYSTEM_PROMPT}
+    const ragSection = ragContext ? `
+CORAL RAG — ACTUAL DATA RETRIEVED (cite these rows directly):
 
+SENTRY STACK TRACES:
+${ragContext.stackTraces.map(r => `  • ${r.title} — at ${r.culprit}`).join('\n')}
+
+SLACK #incidents MESSAGES:
+${ragContext.slackMessages.map(r => `  • "${r.text}"`).join('\n')}
+
+LAUNCHDARKLY ACTIVE FLAGS:
+${ragContext.flagDetails.map(r => `  • ${r.key}: ${r.description || r.name || ''}`).join('\n')}
+
+RECENT GITHUB COMMITS:
+${ragContext.commitMessages.map(r => `  • "${r.message}" by ${r.author}`).join('\n')}
+
+INSTRUCTION: Every sentence in root_cause and recommended_action MUST cite specific text from the rows above.
+` : '';
+
+    const prompt = `${SYSTEM_PROMPT}
+${ragSection}
 User question: "${question}"
 
 Sources queried via Coral: ${data.sources_queried.join(', ')}
 
-Timeline (${data.timeline.length} events across ${data.sources_queried.length} sources):
+Timeline (${data.timeline.length} events):
 ${timelineSummary}
 
-Coral SQL query used:
+Coral SQL:
 ${data.coral_query}`;
 
     const result = await model.generateContent(prompt);

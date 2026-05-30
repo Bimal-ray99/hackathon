@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SiGithub, SiSentry, SiSlack, SiStripe, SiIntercom } from 'react-icons/si';
-import { TbFlag, TbWifi, TbDatabase, TbDatabaseOff } from 'react-icons/tb';
+import { TbFlag, TbWifi } from 'react-icons/tb';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -40,12 +40,39 @@ function timeAgo(ts: string): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-export function OrgPulseFeed() {
+interface OrgPulseFeedProps {
+  seedEnabled?: boolean;
+}
+
+interface NoiseScore {
+  alert_id: string;
+  title: string;
+  score: number;
+  signals: string[];
+}
+
+function scoreColor(score: number): string {
+  if (score >= 70) return 'bg-red-500/20 text-red-400 border-red-500/30';
+  if (score >= 30) return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+  return 'bg-slate-700/50 text-slate-500 border-slate-600/30';
+}
+
+function matchScore(text: string, scores: NoiseScore[]): NoiseScore | null {
+  const lower = text.toLowerCase();
+  for (const s of scores) {
+    const words = s.title.toLowerCase().split(/\W+/).filter(w => w.length > 4);
+    if (words.some(w => lower.includes(w))) return s;
+  }
+  return null;
+}
+
+export function OrgPulseFeed({ seedEnabled = true }: OrgPulseFeedProps) {
   const [insights, setInsights] = useState<PulseInsight[]>([]);
+  const [noiseScores, setNoiseScores] = useState<NoiseScore[]>([]);
   const [connected, setConnected] = useState(false);
-  const [seedEnabled, setSeedEnabled] = useState(true);
   const [, setTick] = useState(0);
   const esRef = useRef<EventSource | null>(null);
+  const prevSeedRef = useRef<boolean>(seedEnabled);
 
   function connect(seed: boolean) {
     esRef.current?.close();
@@ -70,7 +97,7 @@ export function OrgPulseFeed() {
   }
 
   useEffect(() => {
-    connect(true);
+    connect(seedEnabled);
     const tick = setInterval(() => setTick(t => t + 1), 30000);
     return () => {
       esRef.current?.close();
@@ -79,11 +106,20 @@ export function OrgPulseFeed() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function toggleSeed() {
-    const next = !seedEnabled;
-    setSeedEnabled(next);
-    connect(next);
-  }
+  useEffect(() => {
+    fetch(`${BASE}/api/noise/scores?seed=${seedEnabled}`)
+      .then(r => r.json())
+      .then(data => setNoiseScores(data as NoiseScore[]))
+      .catch(() => {});
+  }, [seedEnabled]);
+
+  useEffect(() => {
+    if (prevSeedRef.current !== seedEnabled) {
+      prevSeedRef.current = seedEnabled;
+      connect(seedEnabled);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedEnabled]);
 
   return (
     <div className="space-y-3">
@@ -92,26 +128,11 @@ export function OrgPulseFeed() {
           <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
           <h2 className="text-sm font-semibold text-slate-700">Org Pulse Feed</h2>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={toggleSeed}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
-              seedEnabled
-                ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
-                : 'bg-slate-100 border-slate-200 text-slate-500 hover:border-slate-300'
-            }`}
-          >
-            {seedEnabled
-              ? <><TbDatabase className="w-3 h-3" /> Seed on</>
-              : <><TbDatabaseOff className="w-3 h-3" /> Live only</>
-            }
-          </button>
-          <div className="flex items-center gap-1.5">
-            <TbWifi className={`w-3.5 h-3.5 ${connected ? 'text-emerald-500' : 'text-slate-400'}`} />
-            <span className="text-xs text-slate-400">
-              {connected ? (seedEnabled ? 'live · seed fallback' : 'live · Coral only') : 'connecting...'}
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <TbWifi className={`w-3.5 h-3.5 ${connected ? 'text-emerald-500' : 'text-slate-400'}`} />
+          <span className="text-xs text-slate-400">
+            {connected ? (seedEnabled ? 'live · seed fallback' : 'live · Coral only') : 'connecting...'}
+          </span>
         </div>
       </div>
 
@@ -126,6 +147,7 @@ export function OrgPulseFeed() {
         )}
         {insights.map((item, i) => {
           const style = SEVERITY_STYLE[item.severity];
+          const noise = matchScore(item.text, noiseScores);
           return (
             <div
               key={item.id}
@@ -135,7 +157,7 @@ export function OrgPulseFeed() {
               <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${style.dot}`} />
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-300 leading-relaxed">{item.text}</p>
-                <div className="flex items-center gap-2 mt-1.5">
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <div className="flex items-center gap-1">
                     {item.sources.map(s => (
                       <span key={s} className="text-slate-500">{SOURCE_ICON[s]}</span>
@@ -145,6 +167,14 @@ export function OrgPulseFeed() {
                   <span className={`text-xs font-mono font-semibold ${style.impact}`}>{item.impact}</span>
                   {item.live && (
                     <span className="text-xs text-emerald-500 font-mono">live</span>
+                  )}
+                  {noise !== null && (
+                    <span
+                      className={`text-xs font-bold px-1.5 py-0.5 rounded border tabular-nums ml-1 ${scoreColor(noise.score)}`}
+                      title={noise.signals.join(', ') || 'No signal match'}
+                    >
+                      {noise.score}
+                    </span>
                   )}
                   <span className="text-xs text-slate-600 ml-auto">{timeAgo(item.ts)}</span>
                 </div>

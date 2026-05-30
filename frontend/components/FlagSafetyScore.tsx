@@ -60,19 +60,20 @@ function ScoreRing({ score, grade }: { score: number; grade: Grade }) {
 
 interface FlagSafetyScoreProps {
   flagKey?: string;
+  seed?: boolean;
 }
 
-export function FlagSafetyScore({ flagKey = 'new-upload-flow' }: FlagSafetyScoreProps) {
+export function FlagSafetyScore({ flagKey = 'new-upload-flow', seed = true }: FlagSafetyScoreProps) {
   const [data, setData] = useState<FlagScore | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${BASE}/api/flags/safety?flag_key=${encodeURIComponent(flagKey)}`)
+    fetch(`${BASE}/api/flags/safety?flag_key=${encodeURIComponent(flagKey)}&seed=${seed}`)
       .then(r => r.json())
       .then(d => { setData(d as FlagScore); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [flagKey]);
+  }, [flagKey, seed]);
 
   if (loading) {
     return (
