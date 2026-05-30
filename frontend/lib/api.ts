@@ -101,3 +101,15 @@ export function streamAnalyze(
 
   return () => es.close();
 }
+
+export interface AnomalySignal {
+  source: string;
+  signal: string;
+  question: string;
+}
+
+export async function simulateAnomaly(): Promise<AnomalySignal> {
+  const res = await fetch(`${BASE}/api/autopilot/simulate`, { method: 'POST' });
+  if (!res.ok) throw new Error('Simulate failed');
+  return res.json();
+}

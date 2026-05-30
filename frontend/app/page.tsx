@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   SiGithub, SiSentry, SiSlack, SiStripe, SiIntercom
 } from 'react-icons/si';
-import { TbFlag } from 'react-icons/tb';
+import { TbFlag, TbRadar } from 'react-icons/tb';
 import { RiUploadCloud2Line } from 'react-icons/ri';
 import { ChatInterface } from '@/components/ChatInterface';
 import { IncidentTimeline } from '@/components/IncidentTimeline';
 import { ImpactCard } from '@/components/ImpactCard';
 import { QueryViewer } from '@/components/QueryViewer';
-import { AnalysisResponse, Incident, getIncidents, streamAnalyze } from '@/lib/api';
+import { AnalysisResponse, AnomalySignal, Incident, getIncidents, streamAnalyze, simulateAnomaly } from '@/lib/api';
 
 const SOURCE_ICON: Record<string, React.ReactNode> = {
   launchdarkly: <TbFlag className="w-3 h-3" />,
@@ -109,9 +109,18 @@ export default function Home() {
   const [sourceDone, setSourceDone] = useState<Record<string, { rows: number; live: boolean }>>({});
   const [copied, setCopied] = useState(false);
   const [activeIncidentId, setActiveIncidentId] = useState<string | null>(null);
+  const [autopilot, setAutopilot] = useState(false);
+  const autopilotESRef = useRef<EventSource | null>(null);
+  const [autopilotLabel, setAutopilotLabel] = useState<string | null>(null);
 
   useEffect(() => {
     getIncidents().then(setIncidents).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      autopilotESRef.current?.close();
+    };
   }, []);
 
   function handleIncidentClick(inc: Incident) {
@@ -148,6 +157,91 @@ export default function Home() {
     exportReport(analysis);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  function toggleAutopilot() {
+    if (autopilot) {
+      autopilotESRef.current?.close();
+      autopilotESRef.current = null;
+      setAutopilot(false);
+      setAutopilotLabel(null);
+      return;
+    }
+
+    setAutopilot(true);
+    setAutopilotLabel(null);
+    setAnalysis(null);
+    setSourceDone({});
+
+    const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const es = new EventSource(`${BASE}/api/autopilot/stream`);
+    autopilotESRef.current = es;
+
+    const doneRef: Record<string, { rows: number; live: boolean }> = {};
+
+    es.addEventListener('anomaly_detected', (e: MessageEvent) => {
+      const data = JSON.parse(e.data) as AnomalySignal;
+      setAutopilotLabel(`Autopilot detected: ${data.signal}`);
+      setLoading(true);
+      setAnalysis(null);
+      setSourceDone({});
+      Object.keys(doneRef).forEach(k => delete doneRef[k]);
+    });
+
+    es.addEventListener('source_done', (e: MessageEvent) => {
+      const data = JSON.parse(e.data);
+      const src = data.source as string;
+      doneRef[src] = { rows: data.rows as number, live: data.live as boolean };
+      setSourceDone({ ...doneRef });
+    });
+
+    es.addEventListener('complete', (e: MessageEvent) => {
+      const data = JSON.parse(e.data);
+      setAnalysis(data);
+      setLoading(false);
+    });
+
+    es.addEventListener('error', (e: Event) => {
+      const msgEvent = e as MessageEvent;
+      if (msgEvent.data) {
+        try {
+          const data = JSON.parse(msgEvent.data);
+          if (data?.fallback) setAnalysis(data.fallback);
+        } catch { /* ignore */ }
+      }
+      setLoading(false);
+    });
+
+    es.onerror = () => setLoading(false);
+  }
+
+  async function handleSimulate() {
+    try {
+      const signal = await simulateAnomaly();
+      setAutopilotLabel(`Autopilot detected: ${signal.signal}`);
+      setLoading(true);
+      setAnalysis(null);
+      setSourceDone({});
+      const doneRef: Record<string, { rows: number; live: boolean }> = {};
+
+      streamAnalyze(
+        signal.question,
+        (event) => {
+          if (event.type === 'source_done') {
+            const src = event.data.source as string;
+            doneRef[src] = { rows: event.data.rows as number, live: event.data.live as boolean };
+            setSourceDone({ ...doneRef });
+          }
+        },
+        (result) => {
+          setAnalysis(result);
+          setLoading(false);
+        },
+        () => setLoading(false)
+      );
+    } catch {
+      setLoading(false);
+    }
   }
 
   return (
@@ -242,11 +336,34 @@ export default function Home() {
 
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200 px-8 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-emerald-400" />
             <span className="text-xs text-slate-500 font-medium">Live · all sources connected</span>
+            {autopilot && (
+              <button
+                onClick={handleSimulate}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs text-slate-600 font-medium transition-colors disabled:opacity-40"
+              >
+                Simulate
+              </button>
+            )}
           </div>
-          <span className="text-xs text-slate-400">PulseIQ — Organizational Intelligence</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleAutopilot}
+              disabled={loading}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                autopilot
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                  : 'bg-slate-100 border-slate-200 text-slate-500 hover:border-slate-300'
+              }`}
+            >
+              <TbRadar className={`w-3.5 h-3.5 ${autopilot ? 'animate-pulse' : ''}`} />
+              {autopilot ? 'Monitoring org...' : 'Autopilot'}
+            </button>
+            <span className="text-xs text-slate-400">PulseIQ — Organizational Intelligence</span>
+          </div>
         </div>
 
         <div className="p-8 max-w-4xl mx-auto space-y-6">
@@ -258,7 +375,7 @@ export default function Home() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold text-orange-400 uppercase tracking-wider mb-1">
-                      AI Analysis Complete
+                      {autopilotLabel ?? 'AI Analysis Complete'}
                     </p>
                     <p className="text-white/90 text-sm leading-relaxed font-medium">
                       <TypewriterText text={analysis.summary} />
