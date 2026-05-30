@@ -7,6 +7,7 @@ import { analyzeRouter } from './routes/analyze';
 import { incidentsRouter } from './routes/incidents';
 import { timelineRouter } from './routes/timeline';
 import { impactRouter } from './routes/impact';
+import { streamRouter } from './routes/stream';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -18,6 +19,7 @@ app.use('/api/analyze', analyzeRouter);
 app.use('/api/incidents', incidentsRouter);
 app.use('/api/timeline', timelineRouter);
 app.use('/api/impact', impactRouter);
+app.use('/api/stream', streamRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 

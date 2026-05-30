@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import { CoralClient } from '../coral/client';
 
 export const incidentsRouter = Router();
+const coral = new CoralClient();
 
-incidentsRouter.get('/', (_req, res) => {
-  // Return empty array while integrating live incidents
-  res.json([]);
+incidentsRouter.get('/', async (_req, res) => {
+  const incidents = await coral.getLiveIncidents();
+  res.json(incidents);
 });

@@ -62,3 +62,42 @@ export async function getIncidents(): Promise<Incident[]> {
   if (!res.ok) throw new Error('Failed to fetch incidents');
   return res.json();
 }
+
+export interface StreamEvent {
+  type: 'start' | 'source_start' | 'source_done' | 'gemini_start' | 'complete' | 'error';
+  data: Record<string, unknown>;
+}
+
+export function streamAnalyze(
+  question: string,
+  onEvent: (event: StreamEvent) => void,
+  onDone: (result: AnalysisResponse) => void,
+  onError: (err: string) => void
+): () => void {
+  const url = `${BASE}/api/stream?question=${encodeURIComponent(question)}`;
+  const es = new EventSource(url);
+
+  const events = ['start', 'source_start', 'source_done', 'gemini_start', 'complete', 'error'];
+  events.forEach(type => {
+    es.addEventListener(type, (e: MessageEvent) => {
+      const data = JSON.parse(e.data);
+      onEvent({ type: type as StreamEvent['type'], data });
+      if (type === 'complete') {
+        onDone(data as AnalysisResponse);
+        es.close();
+      }
+      if (type === 'error') {
+        if (data.fallback) onDone(data.fallback as AnalysisResponse);
+        else onError(data.message || 'Stream failed');
+        es.close();
+      }
+    });
+  });
+
+  es.onerror = () => {
+    onError('Connection to backend lost');
+    es.close();
+  };
+
+  return () => es.close();
+}
