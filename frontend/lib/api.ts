@@ -57,8 +57,8 @@ export async function analyzeQuestion(
   return res.json();
 }
 
-export async function getIncidents(seed = true): Promise<Incident[]> {
-  const res = await fetch(`${BASE}/api/incidents?seed=${seed}`);
+export async function getIncidents(): Promise<Incident[]> {
+  const res = await fetch(`${BASE}/api/incidents`);
   if (!res.ok) throw new Error('Failed to fetch incidents');
   return res.json();
 }

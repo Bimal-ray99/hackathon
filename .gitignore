@@ -9,3 +9,4 @@ dist/
 skills-lock.json
 .env.example
 /docs
+/.claude

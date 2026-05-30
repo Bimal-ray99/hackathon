@@ -16,13 +16,10 @@ import { FlagSafetyScore } from '@/components/FlagSafetyScore';
 import { OrgPulseFeed } from '@/components/OrgPulseFeed';
 import { DeepDiagnosisPanel } from '@/components/DeepDiagnosisPanel';
 import { SilentChurnPanel } from '@/components/SilentChurnPanel';
-import { PostmortemPanel } from '@/components/PostmortemPanel';
-import { DejaVuPanel } from '@/components/DejaVuPanel';
-import { OraclePanel } from '@/components/OraclePanel';
 import { AnalysisResponse, AnomalySignal, Incident, TimelineEvent, getIncidents, streamAnalyze, simulateAnomaly } from '@/lib/api';
 
-function extractFlagKey(timeline: TimelineEvent[] | undefined): string {
-  for (const e of (timeline ?? [])) {
+function extractFlagKey(timeline: TimelineEvent[]): string {
+  for (const e of timeline) {
     if (e.source === 'launchdarkly') {
       const meta = e.metadata as Record<string, unknown> | undefined;
       if (meta?.flag_key) return String(meta.flag_key);
@@ -64,26 +61,24 @@ const INCIDENT_QUESTION: Record<string, string> = {
   'inc-003': 'Why are dashboards timing out?',
 };
 
-function TypewriterText({ text }: { text: string | undefined }) {
-  const safe = text ?? '';
+function TypewriterText({ text }: { text: string }) {
   const [displayed, setDisplayed] = useState('');
 
   useEffect(() => {
     setDisplayed('');
-    if (!safe) return;
     let i = 0;
     const timer = setInterval(() => {
       i++;
-      setDisplayed(safe.slice(0, i));
-      if (i >= safe.length) clearInterval(timer);
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) clearInterval(timer);
     }, 16);
     return () => clearInterval(timer);
-  }, [safe]);
+  }, [text]);
 
   return (
     <span>
       {displayed}
-      {displayed.length < safe.length && (
+      {displayed.length < text.length && (
         <span className="animate-pulse text-orange-300 ml-0.5">|</span>
       )}
     </span>
@@ -109,11 +104,11 @@ function exportReport(analysis: AnalysisResponse) {
     ``,
     `BUSINESS IMPACT`,
     `  MRR at Risk        : $${analysis.mrr_at_risk.toLocaleString()}`,
-    `  Affected Customers : ${analysis.affected_customers ?? 0}`,
-    `  Support Tickets    : ${analysis.support_ticket_count ?? 0}`,
+    `  Affected Customers : ${analysis.affected_customers.length}`,
+    `  Support Tickets    : ${analysis.support_ticket_count}`,
     ``,
     `SOURCES QUERIED`,
-    `  ${(analysis.sources_queried ?? []).join(', ')}`,
+    `  ${analysis.sources_queried.join(', ')}`,
     ``,
     `CORAL SQL`,
     analysis.coral_query,
@@ -136,8 +131,8 @@ export default function Home() {
   const [seedEnabled, setSeedEnabled] = useState(true);
 
   useEffect(() => {
-    getIncidents(seedEnabled).then(setIncidents).catch(() => setIncidents([]));
-  }, [seedEnabled]);
+    getIncidents().then(setIncidents).catch(() => {});
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -345,15 +340,15 @@ export default function Home() {
               return (
                 <div key={s} className="flex items-center gap-2 px-1">
                   <div className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    queried ? (isLive ? 'bg-emerald-400' : seedEnabled ? 'bg-yellow-400' : 'bg-slate-600') : 'bg-slate-600'
+                    queried ? (isLive ? 'bg-emerald-400' : 'bg-yellow-400') : 'bg-slate-600'
                   }`} />
                   <span className="text-slate-500 flex items-center gap-1.5 flex-1">
                     <span className="text-slate-400">{SOURCE_ICON[s]}</span>
                     <span className="text-xs text-slate-400">{s}</span>
                   </span>
                   {queried && (
-                    <span className={`text-xs font-mono ${isLive ? 'text-emerald-500' : seedEnabled ? 'text-yellow-500' : 'text-slate-600'}`}>
-                      {isLive ? `${result.rows}r` : seedEnabled ? 'seed' : '0r'}
+                    <span className={`text-xs font-mono ${isLive ? 'text-emerald-500' : 'text-yellow-500'}`}>
+                      {isLive ? `${result.rows}r` : 'seed'}
                     </span>
                   )}
                 </div>
@@ -466,14 +461,14 @@ export default function Home() {
           {/* Timeline */}
           {analysis && !loading && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <IncidentTimeline events={analysis.timeline ?? []} />
+              <IncidentTimeline events={analysis.timeline} />
             </div>
           )}
 
           {/* Causal Chain */}
-          {analysis && !loading && (analysis.timeline?.length ?? 0) > 1 && (
+          {analysis && !loading && analysis.timeline.length > 1 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <CausalChainGraph events={analysis.timeline ?? []} />
+              <CausalChainGraph events={analysis.timeline} />
             </div>
           )}
 
@@ -500,27 +495,6 @@ export default function Home() {
             <SilentChurnPanel seedEnabled={seedEnabled} />
           </div>
 
-          {/* Pre-Deploy Oracle */}
-          {analysis && !loading && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <OraclePanel flagKey={extractFlagKey(analysis.timeline)} seed={seedEnabled} />
-            </div>
-          )}
-
-          {/* Incident Deja Vu */}
-          {analysis && !loading && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <DejaVuPanel incidentId={analysis.incidentId} seed={seedEnabled} />
-            </div>
-          )}
-
-          {/* Auto Postmortem */}
-          {analysis && !loading && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <PostmortemPanel incidentId={analysis.incidentId} seed={seedEnabled} />
-            </div>
-          )}
-
           {/* Remediation */}
           {analysis && !loading && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -546,12 +520,12 @@ export default function Home() {
                 </div>
                 <QueryViewer
                   sql={analysis.coral_query}
-                  sources={analysis.sources_queried ?? []}
+                  sources={analysis.sources_queried}
                 />
                 <div className="text-xs text-slate-400 space-y-2 pt-3 border-t border-slate-100">
                   <div className="flex justify-between items-center">
                     <span>Sources joined</span>
-                    <span className="font-semibold text-slate-600 tabular-nums">{analysis.sources_queried?.length ?? 0}</span>
+                    <span className="font-semibold text-slate-600 tabular-nums">{analysis.sources_queried.length}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span>Query type</span>

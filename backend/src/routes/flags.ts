@@ -85,41 +85,46 @@ function computeSafetyScore(data: {
   return { score, grade, factors };
 }
 
-// GET /api/flags/safety?flag_key=new-upload-flow&seed=true
+// GET /api/flags/safety?flag_key=new-upload-flow
 flagsRouter.get('/safety', async (req: Request, res: Response) => {
   const flagKey = String(req.query.flag_key || 'new-upload-flow');
-  const useSeed = req.query.seed !== 'false';
 
-  if (useSeed) {
-    const data = SEED_FLAG_SAFETY[flagKey] ?? SEED_FLAG_SAFETY['new-upload-flow'];
-    return res.json({ flag_key: flagKey, ...computeSafetyScore(data), raw: data, source: 'seed' });
-  }
+  let liveData: typeof SEED_FLAG_SAFETY[string] | null = null;
 
   try {
+    // Try Coral: get error count associated with this flag
     const errorRows = await coral.query(
       `SELECT COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved'`
     );
     const errorCount = Number((errorRows[0] as Record<string, unknown>)?.count ?? 0);
 
+    // Try Coral: get flag details including rollout
     const flagRows = await coral.query(
       `SELECT * FROM launchdarkly.feature_flags WHERE key = '${flagKey}' LIMIT 1`
     );
     const flag = flagRows[0] as Record<string, unknown> | undefined;
 
-    if (!errorRows.length && !flagRows.length) {
-      return res.json({ flag_key: flagKey, score: null, source: 'live', error: 'No Coral data' });
+    if (errorRows.length > 0 || flagRows.length > 0) {
+      liveData = {
+        error_count: errorCount,
+        affected_customers: 12, // from seed — Stripe doesn't expose this via Coral
+        rollback_count: flag?.archived ? 1 : 0,
+        blast_radius_pct: flag?.includeInSnippet ? 100 : 50,
+      };
     }
-
-    const liveData = {
-      error_count: errorCount,
-      affected_customers: 12,
-      rollback_count: flag?.archived ? 1 : 0,
-      blast_radius_pct: flag?.includeInSnippet ? 100 : 50,
-    };
-    return res.json({ flag_key: flagKey, ...computeSafetyScore(liveData), raw: liveData, source: 'live' });
   } catch {
-    return res.json({ flag_key: flagKey, score: null, source: 'live', error: 'Coral unavailable' });
+    // Coral unavailable — fall through to seed
   }
+
+  const data = liveData ?? SEED_FLAG_SAFETY[flagKey] ?? SEED_FLAG_SAFETY['new-upload-flow'];
+  const result = computeSafetyScore(data);
+
+  return res.json({
+    flag_key: flagKey,
+    ...result,
+    raw: data,
+    source: liveData ? 'live' : 'seed',
+  });
 });
 
 // GET /api/flags/all-scores — scores all known flags for the sidebar

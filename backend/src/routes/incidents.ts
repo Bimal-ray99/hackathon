@@ -4,8 +4,7 @@ import { CoralClient } from '../coral/client';
 export const incidentsRouter = Router();
 const coral = new CoralClient();
 
-incidentsRouter.get('/', async (req, res) => {
-  const useSeed = req.query.seed !== 'false';
-  const incidents = await coral.getLiveIncidents(useSeed);
+incidentsRouter.get('/', async (_req, res) => {
+  const incidents = await coral.getLiveIncidents();
   res.json(incidents);
 });

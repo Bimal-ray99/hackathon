@@ -4,10 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { AffectedCustomer } from '@/lib/api';
 
 interface ImpactCardProps {
-  mrr_at_risk: number | undefined;
-  affected_customers: AffectedCustomer[] | number | undefined;
-  support_ticket_count: number | undefined;
-  confidence: 'high' | 'medium' | 'low' | undefined;
+  mrr_at_risk: number;
+  affected_customers: AffectedCustomer[];
+  support_ticket_count: number;
+  confidence: 'high' | 'medium' | 'low';
 }
 
 function formatMRR(amount: number) {
@@ -52,25 +52,24 @@ export function ImpactCard({
       <div className="grid grid-cols-3 gap-3">
         <div className="text-center p-3 rounded-xl bg-red-50 border border-red-100">
           <p className="text-xl font-bold text-red-600 tabular-nums">
-            <AnimatedNumber target={mrr_at_risk ?? 0} format={formatMRR} />
+            <AnimatedNumber target={mrr_at_risk} format={formatMRR} />
           </p>
           <p className="text-xs text-red-400 mt-1 font-medium">MRR at Risk</p>
         </div>
         <div className="text-center p-3 rounded-xl bg-orange-50 border border-orange-100">
           <p className="text-xl font-bold text-orange-500 tabular-nums">
-            <AnimatedNumber target={typeof affected_customers === 'number' ? (affected_customers ?? 0) : (affected_customers?.length ?? 0)} format={n => String(n)} />
+            <AnimatedNumber target={affected_customers.length} format={n => String(n)} />
           </p>
           <p className="text-xs text-orange-400 mt-1 font-medium">Customers</p>
         </div>
         <div className="text-center p-3 rounded-xl bg-yellow-50 border border-yellow-100">
           <p className="text-xl font-bold text-yellow-600 tabular-nums">
-            <AnimatedNumber target={support_ticket_count ?? 0} format={n => String(n)} />
+            <AnimatedNumber target={support_ticket_count} format={n => String(n)} />
           </p>
           <p className="text-xs text-yellow-500 mt-1 font-medium">Tickets</p>
         </div>
       </div>
 
-      {Array.isArray(affected_customers) && affected_customers.length > 0 && (
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Affected Customers</p>
         <div className="rounded-xl border border-slate-200 overflow-hidden">
@@ -83,7 +82,7 @@ export function ImpactCard({
               </tr>
             </thead>
             <tbody>
-              {(affected_customers as AffectedCustomer[]).slice(0, 6).map((c, i) => (
+              {affected_customers.slice(0, 6).map((c, i) => (
                 <tr key={c.id} className={`border-t border-slate-100 ${i % 2 !== 0 ? 'bg-slate-50/50' : ''}`}>
                   <td className="px-3 py-2 text-slate-800 font-medium">{c.name}</td>
                   <td className="px-3 py-2">
@@ -94,14 +93,13 @@ export function ImpactCard({
               ))}
             </tbody>
           </table>
-          {(affected_customers as AffectedCustomer[]).length > 6 && (
+          {affected_customers.length > 6 && (
             <div className="px-3 py-2 text-xs text-slate-400 bg-slate-50 border-t border-slate-100">
-              +{(affected_customers as AffectedCustomer[]).length - 6} more customers
+              +{affected_customers.length - 6} more customers
             </div>
           )}
         </div>
       </div>
-      )}
     </div>
   );
 }
