@@ -66,12 +66,18 @@ streamRouter.get('/', async (req: Request, res: Response) => {
   send('gemini_start', { message: 'Gemini analyzing cross-source data...' });
 
   try {
+    if (!useSeed && allRows.length === 0) {
+      send('complete', { error: 'No live Coral data available', source_results: sourceResults });
+      res.end();
+      return;
+    }
+
     const incidentData = allRows.length > 0
       ? await coral.runIncidentQuery('inc-001')
       : { ...SEED_ANALYSIS };
 
     // RAG: fetch rich context in parallel
-    let ragContext = SEED_RAG_CONTEXT;
+    let ragContext = useSeed ? SEED_RAG_CONTEXT : { stackTraces: [], slackMessages: [], flagDetails: [], commitMessages: [] };
 
     if (!useSeed) {
       const [stackRes, slackRes, flagRes, commitRes] = await Promise.allSettled([
@@ -85,7 +91,7 @@ streamRouter.get('/', async (req: Request, res: Response) => {
           `SELECT key, name, description FROM launchdarkly.feature_flags WHERE project_key = 'default' LIMIT 5`
         ),
         coral.query(
-          `SELECT commit__message as message, commit__author__name as author FROM github.commits ORDER BY commit__author__date DESC LIMIT 3`
+          `SELECT commit__message as message, commit__author__name as author FROM github.commits WHERE owner = 'Bimal-ray99' AND repo = 'pulseiq-victim-service' ORDER BY commit__author__date DESC LIMIT 3`
         ),
       ]);
 
@@ -118,8 +124,13 @@ streamRouter.get('/', async (req: Request, res: Response) => {
     });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Analysis failed';
-    send('error', { message: errMsg, fallback: { ...SEED_ANALYSIS, question } });
-    send('complete', { ...SEED_ANALYSIS, question, source_results: sourceResults });
+    if (useSeed) {
+      send('error', { message: errMsg, fallback: { ...SEED_ANALYSIS, question } });
+      send('complete', { ...SEED_ANALYSIS, question, source_results: sourceResults });
+    } else {
+      send('error', { message: errMsg });
+      send('complete', { error: errMsg, source_results: sourceResults });
+    }
   }
 
   res.end();

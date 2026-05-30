@@ -15,10 +15,11 @@ interface Factor {
 
 interface FlagScore {
   flag_key: string;
-  score: number;
-  grade: Grade;
+  score: number | null;
+  grade: Grade | null;
   factors: Factor[];
   source: 'live' | 'seed';
+  error?: string;
 }
 
 const GRADE_STYLE: Record<Grade, {
@@ -85,6 +86,20 @@ export function FlagSafetyScore({ flagKey = 'new-upload-flow', seed = true }: Fl
   }
 
   if (!data) return null;
+
+  if (data.error || data.score === null || data.grade === null) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+          <h2 className="text-sm font-semibold text-slate-700">Flag Safety Score</h2>
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 text-center">
+          <p className="text-xs text-slate-500">No live data — connect Coral to see real-time flag safety scores</p>
+        </div>
+      </div>
+    );
+  }
 
   const style = GRADE_STYLE[data.grade];
 

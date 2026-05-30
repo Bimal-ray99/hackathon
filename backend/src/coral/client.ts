@@ -58,14 +58,35 @@ export class CoralClient {
     }
   }
 
-  async getLiveIncidents(): Promise<Incident[]> {
-    if (this.useSeed) return SEED_INCIDENTS;
+  async getLiveIncidents(useSeed = true): Promise<Incident[]> {
+    if (useSeed) return SEED_INCIDENTS;
     try {
-      const rows = await this.query(HERO_QUERY);
-      if (rows.length === 0) return SEED_INCIDENTS;
-      return SEED_INCIDENTS; // hero query returns aggregate, not incident list
+      const rows = await this.query(
+        `SELECT id, title, first_seen, last_seen, status, level,
+                times_seen, user_count
+         FROM sentry.issues
+         WHERE status = 'unresolved'
+         ORDER BY first_seen DESC
+         LIMIT 10`
+      );
+      if (rows.length === 0) return [];
+      return rows.map((r, i) => {
+        const row = r as Record<string, unknown>;
+        const level = String(row.level ?? 'error');
+        const severity: Incident['severity'] = level === 'fatal' ? 'P0' : level === 'error' ? 'P1' : 'P2';
+        const userCount = Number(row.user_count ?? 0);
+        return {
+          id: String(row.id ?? `live-${i}`),
+          title: String(row.title ?? 'Unknown error'),
+          status: 'active' as const,
+          severity,
+          started_at: String(row.first_seen ?? new Date().toISOString()),
+          mrr_at_risk: userCount * 100,
+          affected_customers: userCount,
+        };
+      });
     } catch {
-      return SEED_INCIDENTS;
+      return [];
     }
   }
 
@@ -73,7 +94,7 @@ export class CoralClient {
     const queries: Record<string, string> = {
       launchdarkly: `SELECT name AS title, creation_date AS timestamp, 'launchdarkly' AS source FROM launchdarkly.feature_flags WHERE project_key = 'default' ORDER BY creation_date DESC LIMIT 5`,
       sentry: `SELECT title, first_seen AS timestamp, 'sentry' AS source FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 5`,
-      github: `SELECT commit__message AS title, commit__author__date AS timestamp, 'github' AS source FROM github.commits WHERE owner = 'Bimal-ray99' AND repo = 'hackathon' ORDER BY commit__author__date DESC LIMIT 5`,
+      github: `SELECT commit__message AS title, commit__author__date AS timestamp, 'github' AS source FROM github.commits WHERE owner = 'Bimal-ray99' AND repo = 'pulseiq-victim-service' ORDER BY commit__author__date DESC LIMIT 5`,
       slack: `SELECT text AS title, ts AS timestamp, 'slack' AS source FROM slack.messages WHERE channel = 'incidents' LIMIT 5`,
     };
 

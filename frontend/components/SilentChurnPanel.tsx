@@ -57,7 +57,13 @@ export function SilentChurnPanel({ seedEnabled = true }: SilentChurnPanelProps) 
         </div>
       )}
 
-      {!loading && !error && (
+      {!loading && !error && customers.length === 0 && (
+        <div className="rounded-xl border border-slate-800 bg-slate-950 p-5 text-center">
+          <p className="text-xs text-slate-500">No live data — connect Coral to see real-time churn signals</p>
+        </div>
+      )}
+
+      {!loading && !error && customers.length > 0 && (
         <div className="space-y-2">
           {customers.map(c => (
             <div
@@ -113,7 +119,7 @@ export function SilentChurnPanel({ seedEnabled = true }: SilentChurnPanelProps) 
         </div>
       )}
 
-      <p className="text-xs text-slate-600 font-mono pt-1">
+      <p className="text-xs text-slate-600 font-mono pt-1 leading-relaxed">
         Coral JOIN: stripe.customers ⋈ intercom.tickets ⋈ sentry.issues
       </p>
     </div>

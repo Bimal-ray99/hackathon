@@ -16,6 +16,9 @@ import { diagnosisRouter } from './routes/diagnosis';
 import { churnRouter } from './routes/churn';
 import { noiseRouter } from './routes/noise';
 import { setupMCPServer } from './mcp/server';
+import { postmortemRouter } from './routes/postmortem';
+import { similarityRouter } from './routes/similarity';
+import { oracleRouter } from './routes/oracle';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -35,6 +38,9 @@ app.use('/api/pulse', pulseRouter);
 app.use('/api/diagnosis', diagnosisRouter);
 app.use('/api/churn', churnRouter);
 app.use('/api/noise', noiseRouter);
+app.use('/api/postmortem', postmortemRouter);
+app.use('/api/similarity', similarityRouter);
+app.use('/api/oracle', oracleRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 

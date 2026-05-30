@@ -31,7 +31,7 @@ noiseRouter.get('/scores', async (req: Request, res: Response) => {
       `SELECT id, title, culprit FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 10`
     );
 
-    if (!issues.length) return res.json(SEED_SCORES);
+    if (!issues.length) return res.json([]);
 
     const scored: NoiseScore[] = await Promise.all(
       issues.map(async (issue, idx) => {
@@ -83,6 +83,6 @@ noiseRouter.get('/scores', async (req: Request, res: Response) => {
 
     return res.json(scored.sort((a, b) => b.score - a.score));
   } catch {
-    return res.json(SEED_SCORES);
+    return res.json([]);
   }
 });

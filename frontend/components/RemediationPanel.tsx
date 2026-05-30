@@ -15,8 +15,8 @@ interface ActionState {
   error?: string;
 }
 
-function extractFlagKey(events: TimelineEvent[]): string {
-  for (const e of events) {
+function extractFlagKey(events: TimelineEvent[] | undefined): string {
+  for (const e of (events ?? [])) {
     if (e.source === 'launchdarkly') {
       const meta = e.metadata as Record<string, unknown> | undefined;
       if (meta?.flag_key) return String(meta.flag_key);
@@ -25,8 +25,8 @@ function extractFlagKey(events: TimelineEvent[]): string {
   return 'new-upload-flow';
 }
 
-function extractCommitSha(events: TimelineEvent[]): string {
-  for (const e of events) {
+function extractCommitSha(events: TimelineEvent[] | undefined): string {
+  for (const e of (events ?? [])) {
     if (e.source === 'github') {
       const meta = e.metadata as Record<string, unknown> | undefined;
       if (meta?.commit_sha) return String(meta.commit_sha);
@@ -55,8 +55,8 @@ export function RemediationPanel({ analysis }: RemediationPanelProps) {
 
   const flagKey = extractFlagKey(analysis.timeline);
   const commitSha = extractCommitSha(analysis.timeline);
-  const mrrFormatted = `$${analysis.mrr_at_risk.toLocaleString()}`;
-  const customerCount = analysis.affected_customers.length;
+  const mrrFormatted = `$${(analysis.mrr_at_risk ?? 0).toLocaleString()}`;
+  const customerCount = analysis.affected_customers ?? 0;
 
   function setState(id: string, patch: Partial<ActionState>) {
     setStates(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
@@ -64,7 +64,7 @@ export function RemediationPanel({ analysis }: RemediationPanelProps) {
 
   async function executeGitHub() {
     setState('github', { status: 'loading', error: undefined });
-    const body = `## Revert: ${analysis.root_cause.slice(0, 80)}
+    const body = `## Revert: ${(analysis.root_cause ?? '').slice(0, 80)}
 
 **Incident:** ${analysis.incidentId}
 **MRR at Risk:** ${mrrFormatted} · **Affected Customers:** ${customerCount} Enterprise
