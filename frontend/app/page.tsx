@@ -529,31 +529,6 @@ export default function Home() {
                   confidence={analysis.confidence}
                 />
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  <h2 className="text-sm font-semibold text-slate-700">Coral SQL</h2>
-                </div>
-                <QueryViewer
-                  sql={analysis.coral_query}
-                  sources={analysis.sources_queried}
-                  queries_run={analysis.queries_run}
-                />
-                <div className="text-xs text-slate-400 space-y-2 pt-3 border-t border-slate-100">
-                  <div className="flex justify-between items-center">
-                    <span>Sources joined</span>
-                    <span className="font-semibold text-slate-600 tabular-nums">{analysis.sources_queried.length}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Query type</span>
-                    <span className="font-semibold text-slate-600">Cross-source JOIN</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Engine</span>
-                    <span className="font-semibold text-blue-600">Coral</span>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
