@@ -51,7 +51,7 @@ export class GeminiAnalyzer {
         return {
           summary: `${topError.title} — level: ${topError.level ?? 'error'}, project: ${topError.project ?? 'unknown'} (add GEMINI_API_KEY for AI analysis)`,
           root_cause: `Sentry reports: "${topError.title}" (${topError.level ?? 'error'} in ${topError.project ?? 'unknown'}). Active flag: ${flagMention}. ${commitMention ? `Recent commit: "${commitMention}".` : ''}`,
-          recommended_action: `1. Investigate ${topError.culprit || 'error location'}\n2. Check if flag "${flagMention}" correlates with error spike\n3. Add GEMINI_API_KEY to backend .env for AI-powered analysis`,
+          recommended_action: `1. Investigate ${topError.project || 'error location'}\n2. Check if flag "${flagMention}" correlates with error spike\n3. Add GEMINI_API_KEY to backend .env for AI-powered analysis`,
           confidence: 'medium'
         };
       }

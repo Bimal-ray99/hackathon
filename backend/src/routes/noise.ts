@@ -22,7 +22,7 @@ const SEED_SCORES: NoiseScore[] = [
 noiseRouter.get('/scores', async (_req: Request, res: Response) => {
   try {
     const issues = await coral.query(
-      `SELECT id, title, culprit FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 10`
+      `SELECT id, title, level, project FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 10`
     );
 
     if (!issues.length) return res.json([]);

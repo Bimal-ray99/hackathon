@@ -74,7 +74,7 @@ export function setupMCPServer(app: Express) {
       if (name === 'run_coral_analysis') {
         const question = String(toolArgs.question ?? '');
         const queryMap: Record<string, string> = {
-          error: `SELECT title, culprit, COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved' GROUP BY title, culprit ORDER BY count DESC LIMIT 5`,
+          error: `SELECT title, level, COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved' GROUP BY title, level ORDER BY count DESC LIMIT 5`,
           flag: `SELECT key, name, description FROM launchdarkly.feature_flags WHERE project_key = 'default' LIMIT 10`,
           commit: `SELECT commit__message as message, commit__author__name as author, commit__author__date as date FROM github.commits ORDER BY commit__author__date DESC LIMIT 5`,
           customer: `SELECT id, name, mrr, plan FROM stripe.customers WHERE plan = 'enterprise' ORDER BY mrr DESC LIMIT 5`,
@@ -83,7 +83,7 @@ export function setupMCPServer(app: Express) {
 
         const lower = question.toLowerCase();
         const sql = Object.entries(queryMap).find(([k]) => lower.includes(k))?.[1]
-          ?? `SELECT title, culprit FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 5`;
+          ?? `SELECT title, level, project FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 5`;
 
         try {
           const rows = await coral.query(sql);
