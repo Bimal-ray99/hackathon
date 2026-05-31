@@ -31,6 +31,9 @@ Six sources are wired: `sentry`, `launchdarkly`, `github`, `slack`, `stripe`, `i
 
 Per-source timeouts: GitHub gets 12s, everything else 20s. All four analysis queries run in `Promise.allSettled` — one slow or dead source never blocks the others.
 
+<img width="1024" height="1536" alt="image" src="https://github.com/user-attachments/assets/ea083a73-e7fd-48bd-afee-988b51a2ab1f" />
+
+
 ### The Gemini integration
 
 `GeminiAnalyzer` uses `@google/generative-ai` with `responseMimeType: 'application/json'` and temperature 0.4. Three methods:
@@ -63,6 +66,9 @@ This means the UI updates incrementally — you see each Coral source connect or
 
 ### The GitHub code fix pipeline
 
+<img width="1024" height="1536" alt="image" src="https://github.com/user-attachments/assets/0f8944c3-be5e-4ccf-bf2b-f792577a136a" />
+
+
 When you click Generate Fix & PR, the backend does 8 sequential GitHub API calls:
 
 1. `GET /git/trees/HEAD?recursive=1` — full repo file tree
@@ -77,6 +83,9 @@ When you click Generate Fix & PR, the backend does 8 sequential GitHub API calls
 Everything has a seed fallback — if `GITHUB_TOKEN` is unset or any step fails, the UI shows the same panels with realistic static data.
 
 ### Autopilot
+
+<img width="1098" height="1432" alt="image" src="https://github.com/user-attachments/assets/80de62cf-6ab8-446c-a235-85a4f10749a5" />
+
 
 A polling loop runs on `GET /api/autopilot/stream`. Every 15s it queries `sentry.issues` for unresolved error count. When count exceeds threshold it fires:
 
