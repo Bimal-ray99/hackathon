@@ -1,3 +1,6 @@
+<img width="1983" height="793" alt="image" src="https://github.com/user-attachments/assets/752e81cb-15a1-48f8-8256-c8b0a90b2605" />
+
+
 # PulseIQ — Incident Intelligence on Coral
 
 > Pirates of the Coral-bean Hackathon · May 2026 · Track 1: Enterprise Agent
