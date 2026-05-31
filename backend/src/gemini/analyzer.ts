@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { IncidentAnalysis } from '../types';
 
 interface RagContext {
-  stackTraces: { title: string; culprit: string }[];
+  stackTraces: { title: string; level?: string; project?: string }[];
   slackMessages: { text: string; ts?: string }[];
   flagDetails: { key: string; description?: string; name?: string }[];
   commitMessages: { message: string; author: string }[];
@@ -49,8 +49,8 @@ export class GeminiAnalyzer {
         const flagMention = ragContext.flagDetails[0]?.key ?? 'unknown flag';
         const commitMention = ragContext.commitMessages[0]?.message ?? '';
         return {
-          summary: `${topError.title} — detected in ${topError.culprit || 'unknown location'} (Gemini key not set — raw Coral data shown)`,
-          root_cause: `Sentry reports: "${topError.title}" at ${topError.culprit || 'unknown'}. Active flag: ${flagMention}. ${commitMention ? `Recent commit: "${commitMention}".` : ''}`,
+          summary: `${topError.title} — level: ${topError.level ?? 'error'}, project: ${topError.project ?? 'unknown'} (add GEMINI_API_KEY for AI analysis)`,
+          root_cause: `Sentry reports: "${topError.title}" (${topError.level ?? 'error'} in ${topError.project ?? 'unknown'}). Active flag: ${flagMention}. ${commitMention ? `Recent commit: "${commitMention}".` : ''}`,
           recommended_action: `1. Investigate ${topError.culprit || 'error location'}\n2. Check if flag "${flagMention}" correlates with error spike\n3. Add GEMINI_API_KEY to backend .env for AI-powered analysis`,
           confidence: 'medium'
         };
@@ -76,7 +76,7 @@ export class GeminiAnalyzer {
 CORAL RAG — ACTUAL DATA RETRIEVED (cite these rows directly):
 
 SENTRY STACK TRACES:
-${ragContext.stackTraces.map(r => `  • ${r.title} — at ${r.culprit}`).join('\n')}
+${ragContext.stackTraces.map(r => `  • [${r.level ?? 'error'}] ${r.title} (project: ${r.project ?? 'unknown'})`).join('\n')}
 
 SLACK #incidents MESSAGES:
 ${ragContext.slackMessages.map(r => `  • "${r.text}"`).join('\n')}

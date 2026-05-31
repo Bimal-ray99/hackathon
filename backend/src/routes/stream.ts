@@ -47,7 +47,7 @@ streamRouter.get('/', async (req: Request, res: Response) => {
     // RAG: fetch rich grounded context from real Coral sources in parallel
     const [stackRes, slackRes, flagRes, commitRes] = await Promise.allSettled([
       coral.query(
-        `SELECT title, culprit FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 3`
+        `SELECT title, level, project FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 3`
       ),
       coral.query(
         `SELECT text, ts FROM slack.messages WHERE channel = 'incidents' ORDER BY ts DESC LIMIT 5`
@@ -61,7 +61,7 @@ streamRouter.get('/', async (req: Request, res: Response) => {
     ]);
 
     const ragContext = {
-      stackTraces: stackRes.status === 'fulfilled' ? (stackRes.value as { title: string; culprit: string }[]) : [],
+      stackTraces: stackRes.status === 'fulfilled' ? (stackRes.value as { title: string; level: string; project: string }[]) : [],
       slackMessages: slackRes.status === 'fulfilled' ? (slackRes.value as { text: string; ts: string }[]) : [],
       flagDetails: flagRes.status === 'fulfilled' ? (flagRes.value as { key: string; description: string }[]) : [],
       commitMessages: commitRes.status === 'fulfilled' ? (commitRes.value as { message: string; author: string }[]) : [],

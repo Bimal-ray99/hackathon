@@ -8,7 +8,7 @@ ORDER BY creation_date DESC
 LIMIT 1;`;
 
 // Sentry-only timeline — safe when GitHub/LD not connected
-export const TIMELINE_QUERY = `SELECT 'sentry' AS source, title, culprit AS description, first_seen AS timestamp
+export const TIMELINE_QUERY = `SELECT 'sentry' AS source, title, level AS description, first_seen AS timestamp
 FROM sentry.issues
 ORDER BY first_seen DESC
 LIMIT 15`;
