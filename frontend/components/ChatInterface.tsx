@@ -130,14 +130,66 @@ export function ChatInterface({ onAnalysis, isLoading, setLoading, onSourcesUpda
 
       {lastAnalysis && phase === 'done' && (
         <div className="space-y-3">
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Root Cause</p>
+          {/* Summary */}
+          <div className="p-4 rounded-xl bg-slate-800 border border-slate-700">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Summary</p>
+            <p className="text-white text-sm font-medium leading-relaxed">{lastAnalysis.summary}</p>
+          </div>
+
+          {/* Attribution row */}
+          {(lastAnalysis.who_caused || lastAnalysis.affected_component) && (
+            <div className="grid grid-cols-2 gap-2">
+              {lastAnalysis.who_caused && lastAnalysis.who_caused !== 'unknown' && (
+                <div className="p-3 rounded-xl bg-purple-50 border border-purple-200">
+                  <p className="text-xs font-semibold text-purple-500 uppercase tracking-wider mb-1">Who Caused</p>
+                  <p className="text-slate-800 text-sm font-mono font-medium">{lastAnalysis.who_caused}</p>
+                  {lastAnalysis.source_commit && lastAnalysis.source_commit !== 'not available' && (
+                    <p className="text-xs text-slate-500 mt-1 truncate" title={lastAnalysis.source_commit}>
+                      &ldquo;{lastAnalysis.source_commit}&rdquo;
+                    </p>
+                  )}
+                </div>
+              )}
+              {lastAnalysis.affected_component && lastAnalysis.affected_component !== 'unknown' && (
+                <div className="p-3 rounded-xl bg-orange-50 border border-orange-200">
+                  <p className="text-xs font-semibold text-orange-500 uppercase tracking-wider mb-1">Affected Component</p>
+                  <p className="text-slate-800 text-sm font-mono font-medium">{lastAnalysis.affected_component}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Root Cause */}
+          <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+            <p className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-2">Root Cause</p>
             <p className="text-slate-800 leading-relaxed text-sm">{lastAnalysis.root_cause}</p>
           </div>
-          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1">Recommended Action</p>
-            <p className="text-slate-800 text-sm">{lastAnalysis.recommended_action}</p>
-          </div>
+
+          {/* Fix Steps */}
+          {lastAnalysis.fix_steps && lastAnalysis.fix_steps.length > 0 ? (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-3">Fix Steps</p>
+              <div className="space-y-2">
+                {lastAnalysis.fix_steps.map(s => (
+                  <div key={s.step} className="flex gap-3">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                      {s.step}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{s.action}</p>
+                      <p className="text-xs text-slate-600 mt-0.5">{s.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1">Recommended Action</p>
+              <p className="text-slate-800 text-sm">{lastAnalysis.recommended_action}</p>
+            </div>
+          )}
+
           <div className="flex items-center justify-between flex-wrap gap-2">
             <SourceBadges sources={lastAnalysis.sources_queried} />
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${

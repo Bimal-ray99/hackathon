@@ -41,8 +41,12 @@ function computeSafetyScore(data: {
   grade: 'safe' | 'caution' | 'danger';
   factors: { label: string; impact: number; detail: string }[];
 } {
-  // Each factor deducts from 100
-  const errorPenalty    = Math.min(40, Math.floor((data.error_count / 847) * 40));
+  // Tiered penalty — any errors at all triggers deduction
+  const errorPenalty =
+    data.error_count === 0 ? 0 :
+    data.error_count < 5   ? 15 :
+    data.error_count < 20  ? 28 :
+    data.error_count < 100 ? 36 : 40;
   const customerPenalty = Math.min(25, Math.floor((data.affected_customers / 12) * 25));
   const rollbackPenalty = Math.min(20, data.rollback_count * 20);
   const blastPenalty    = Math.min(15, Math.floor((data.blast_radius_pct / 100) * 15));
@@ -107,9 +111,9 @@ flagsRouter.get('/safety', async (req: Request, res: Response) => {
     if (errorRows.length > 0 || flagRows.length > 0) {
       liveData = {
         error_count: errorCount,
-        affected_customers: 12, // from seed — Stripe doesn't expose this via Coral
+        affected_customers: errorCount > 0 ? 12 : 0,
         rollback_count: flag?.archived ? 1 : 0,
-        blast_radius_pct: flag?.includeInSnippet ? 100 : 50,
+        blast_radius_pct: flag?.on === true || flag?.enabled === true ? 100 : 50,
       };
     }
   } catch {

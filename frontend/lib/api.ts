@@ -32,6 +32,10 @@ export interface AnalysisResponse {
   timeline: TimelineEvent[];
   question: string;
   queries_run?: { source: string; sql: string; rows: number; duration_ms: number; status: string }[];
+  fix_steps?: { step: number; action: string; detail: string }[];
+  who_caused?: string;
+  source_commit?: string;
+  affected_component?: string;
 }
 
 export interface Incident {

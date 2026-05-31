@@ -72,15 +72,32 @@ streamRouter.get('/', async (req: Request, res: Response) => {
     const timelineRows = timelineRes.status === 'fulfilled' ? timelineRes.value : [];
 
     // Build enriched timeline: sentry + LD combined
-    const sentryTimeline = (sentryIssues as Record<string,unknown>[]).map((r, i) => ({
-      id: String(i + 1),
-      timestamp: String(r.first_seen ?? new Date().toISOString()),
-      source: 'sentry' as const,
-      type: 'error_spike' as const,
-      title: String(r.title ?? ''),
-      description: String(r.level ?? 'error'),
-      severity: 'critical' as const,
-    }));
+    const sentryTimeline = (sentryIssues as Record<string,unknown>[]).map((r, i) => {
+      const title = String(r.title ?? '');
+      const level = String(r.level ?? 'error');
+      const project = String(r.project ?? '');
+      // Derive type from error class in title
+      const errorClass = title.split(':')[0]?.trim() ?? '';
+      const type = (
+        errorClass.toLowerCase().includes('storage') ? 'storage_failure' :
+        errorClass.toLowerCase().includes('lock') ? 'lock_timeout' :
+        errorClass.toLowerCase().includes('checksum') || errorClass.toLowerCase().includes('mismatch') ? 'data_corruption' :
+        errorClass.toLowerCase().includes('validation') ? 'validation_error' :
+        title.toLowerCase().includes('pool') || title.toLowerCase().includes('connection') ? 'resource_exhaustion' :
+        title.toLowerCase().includes('typeerror') || title.toLowerCase().includes('null') ? 'null_reference' :
+        'error_spike'
+      ) as 'storage_failure' | 'lock_timeout' | 'data_corruption' | 'validation_error' | 'resource_exhaustion' | 'null_reference' | 'error_spike';
+      const severity = (level === 'fatal' ? 'critical' : level === 'error' ? 'critical' : level === 'warning' ? 'warning' : 'info') as 'critical' | 'warning' | 'info';
+      return {
+        id: String(i + 1),
+        timestamp: String(r.first_seen ?? new Date().toISOString()),
+        source: 'sentry' as const,
+        type,
+        title,
+        description: project ? `[${project}] ${level.toUpperCase()} — ${errorClass || 'Exception'}` : `${level.toUpperCase()} — ${errorClass || 'Exception'}`,
+        severity,
+      };
+    });
     const ldTimeline = (ldFlags as Record<string,unknown>[]).map((r, i) => ({
       id: String(sentryTimeline.length + i + 1),
       timestamp: String(r.creation_date ?? new Date().toISOString()),
