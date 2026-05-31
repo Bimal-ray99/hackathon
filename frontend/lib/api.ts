@@ -77,16 +77,20 @@ export function streamAnalyze(
   const url = `${BASE}/api/stream?question=${encodeURIComponent(question)}`;
   const es = new EventSource(url);
 
+  let completed = false;
+
   const events = ['start', 'source_start', 'source_done', 'gemini_start', 'complete', 'error'];
   events.forEach(type => {
     es.addEventListener(type, (e: MessageEvent) => {
       const data = JSON.parse(e.data);
       onEvent({ type: type as StreamEvent['type'], data });
       if (type === 'complete') {
+        completed = true;
         onDone(data as AnalysisResponse);
         es.close();
       }
       if (type === 'error') {
+        completed = true;
         if (data.fallback) onDone(data.fallback as AnalysisResponse);
         else onError(data.message || 'Stream failed');
         es.close();
@@ -95,7 +99,7 @@ export function streamAnalyze(
   });
 
   es.onerror = () => {
-    onError('Connection to backend lost');
+    if (!completed) onError('Connection to backend lost');
     es.close();
   };
 

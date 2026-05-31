@@ -77,6 +77,7 @@ streamRouter.get('/', async (req: Request, res: Response) => {
     });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Analysis failed';
+    console.error('[stream] analysis error:', errMsg);
     send('error', { message: errMsg });
     send('complete', {
       incidentId: 'inc-001',

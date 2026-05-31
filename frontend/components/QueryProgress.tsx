@@ -56,8 +56,8 @@ export function QueryProgress({ activeSource, doneSources, phase }: QueryProgres
               <span className="text-xs flex-1">
                 {isActive && <span className="text-gray-500 animate-pulse">querying...</span>}
                 {isDone && (
-                  <span className={result.live ? 'text-green-600' : 'text-yellow-600'}>
-                    {result.live ? `${result.rows} rows · live` : 'seed data'}
+                  <span className={result.live ? 'text-green-600' : 'text-slate-500'}>
+                    {result.live ? `${result.rows} rows · live` : 'not connected'}
                   </span>
                 )}
               </span>

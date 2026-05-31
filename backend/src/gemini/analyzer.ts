@@ -43,11 +43,23 @@ export class GeminiAnalyzer {
     ragContext?: RagContext
   ): Promise<Pick<IncidentAnalysis, 'summary' | 'root_cause' | 'recommended_action' | 'confidence'>> {
     if (this.useSeed || !this.genAI) {
+      // No Gemini key — synthesize from RAG context directly
+      if (ragContext && ragContext.stackTraces.length > 0) {
+        const topError = ragContext.stackTraces[0];
+        const flagMention = ragContext.flagDetails[0]?.key ?? 'unknown flag';
+        const commitMention = ragContext.commitMessages[0]?.message ?? '';
+        return {
+          summary: `${topError.title} — detected in ${topError.culprit || 'unknown location'} (Gemini key not set — raw Coral data shown)`,
+          root_cause: `Sentry reports: "${topError.title}" at ${topError.culprit || 'unknown'}. Active flag: ${flagMention}. ${commitMention ? `Recent commit: "${commitMention}".` : ''}`,
+          recommended_action: `1. Investigate ${topError.culprit || 'error location'}\n2. Check if flag "${flagMention}" correlates with error spike\n3. Add GEMINI_API_KEY to backend .env for AI-powered analysis`,
+          confidence: 'medium'
+        };
+      }
       return {
-        summary: data.summary,
-        root_cause: data.root_cause,
-        recommended_action: data.recommended_action,
-        confidence: data.confidence
+        summary: data.summary || 'No Coral data available — check source connections',
+        root_cause: data.root_cause || 'Connect Sentry/LaunchDarkly via Coral to see root cause',
+        recommended_action: data.recommended_action || 'Run: coral connect sentry',
+        confidence: data.confidence || 'low'
       };
     }
 
