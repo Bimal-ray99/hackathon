@@ -2,7 +2,7 @@ export interface TimelineEvent {
   id: string;
   timestamp: string;
   source: 'github' | 'launchdarkly' | 'sentry' | 'slack' | 'stripe' | 'intercom';
-  type: 'deploy' | 'flag_change' | 'error_spike' | 'message' | 'payment' | 'ticket';
+  type: 'deploy' | 'flag_change' | 'error_spike' | 'message' | 'payment' | 'ticket' | 'storage_failure' | 'lock_timeout' | 'data_corruption' | 'validation_error' | 'resource_exhaustion' | 'null_reference';
   title: string;
   description: string;
   severity?: 'info' | 'warning' | 'critical';

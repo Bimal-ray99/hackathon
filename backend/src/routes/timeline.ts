@@ -1,12 +1,14 @@
 import { Router } from 'express';
-import { SEED_TIMELINE } from '../seed/data';
+import { CoralClient } from '../coral/client';
 
 export const timelineRouter = Router();
+const coral = new CoralClient();
 
-timelineRouter.get('/:id', (req, res) => {
-  const { id } = req.params;
-  if (id !== 'inc-001') {
-    return res.json(SEED_TIMELINE.slice(0, 3));
+timelineRouter.get('/:id', async (req, res) => {
+  try {
+    const data = await coral.runIncidentQuery(req.params.id);
+    res.json(data.timeline);
+  } catch {
+    res.json([]);
   }
-  return res.json(SEED_TIMELINE);
 });

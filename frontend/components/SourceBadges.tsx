@@ -1,21 +1,15 @@
 'use client';
 
-const SOURCE_COLORS: Record<string, string> = {
-  github: 'bg-gray-800 text-gray-100',
-  launchdarkly: 'bg-blue-600 text-white',
-  sentry: 'bg-red-600 text-white',
-  slack: 'bg-purple-600 text-white',
-  stripe: 'bg-indigo-600 text-white',
-  intercom: 'bg-orange-500 text-white'
-};
+import { SiGithub, SiSentry, SiSlack, SiStripe, SiIntercom } from 'react-icons/si';
+import { TbFlag } from 'react-icons/tb';
 
-const SOURCE_ICONS: Record<string, string> = {
-  github: '⌥',
-  launchdarkly: '⚑',
-  sentry: '⚠',
-  slack: '#',
-  stripe: '$',
-  intercom: '💬'
+const SOURCE_STYLE: Record<string, { bg: string; icon: React.ReactNode }> = {
+  github:       { bg: 'bg-slate-800 text-slate-100',    icon: <SiGithub className="w-3 h-3" /> },
+  launchdarkly: { bg: 'bg-blue-600 text-white',          icon: <TbFlag className="w-3 h-3" /> },
+  sentry:       { bg: 'bg-red-600 text-white',           icon: <SiSentry className="w-3 h-3" /> },
+  slack:        { bg: 'bg-purple-600 text-white',        icon: <SiSlack className="w-3 h-3" /> },
+  stripe:       { bg: 'bg-indigo-600 text-white',        icon: <SiStripe className="w-3 h-3" /> },
+  intercom:     { bg: 'bg-orange-500 text-white',        icon: <SiIntercom className="w-3 h-3" /> },
 };
 
 interface SourceBadgesProps {
@@ -24,15 +18,19 @@ interface SourceBadgesProps {
 
 export function SourceBadges({ sources }: SourceBadgesProps) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {sources.map(source => (
-        <span
-          key={source}
-          className={`px-2 py-1 rounded-full text-xs font-medium ${SOURCE_COLORS[source] || 'bg-gray-200 text-gray-800'}`}
-        >
-          {SOURCE_ICONS[source] || '●'} {source}
-        </span>
-      ))}
+    <div className="flex flex-wrap gap-1.5">
+      {sources.map(source => {
+        const style = SOURCE_STYLE[source];
+        return (
+          <span
+            key={source}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${style?.bg || 'bg-slate-200 text-slate-700'}`}
+          >
+            {style?.icon}
+            {source}
+          </span>
+        );
+      })}
     </div>
   );
 }

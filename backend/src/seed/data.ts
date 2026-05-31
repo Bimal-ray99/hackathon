@@ -9,7 +9,7 @@ export const SEED_TIMELINE: TimelineEvent[] = [
     title: 'Flag enabled: new-upload-flow',
     description: 'Feature flag "new-upload-flow" enabled for Enterprise tier (100% rollout)',
     severity: 'info',
-    metadata: { flag_key: 'new-upload-flow', environment: 'production', targeting_rule: 'Enterprise tier' }
+    metadata: { flag_key: 'new-upload-flow', environment: 'production' }
   },
   {
     id: 'evt-002',
@@ -19,7 +19,7 @@ export const SEED_TIMELINE: TimelineEvent[] = [
     title: 'Commit a3f91b merged',
     description: 'PR #847: Refactor upload service to use streaming API',
     severity: 'info',
-    metadata: { commit_sha: 'a3f91b', pr_number: 847, author: 'dev@acme.com' }
+    metadata: { commit_sha: 'a3f91b', pr_number: 847 }
   },
   {
     id: 'evt-003',
@@ -29,7 +29,7 @@ export const SEED_TIMELINE: TimelineEvent[] = [
     title: '847 errors in 13 minutes',
     description: "TypeError: Cannot read properties of undefined (reading 'stream')",
     severity: 'critical',
-    metadata: { error_count: 847, error_type: 'TypeError', affected_users: 34 }
+    metadata: { error_count: 847, error_type: 'TypeError' }
   },
   {
     id: 'evt-004',
@@ -59,7 +59,7 @@ export const SEED_TIMELINE: TimelineEvent[] = [
     title: '12 Enterprise tickets opened',
     description: 'Customers reporting: "Upload button does nothing", "Files failing to upload"',
     severity: 'critical',
-    metadata: { ticket_count: 12, avg_customer_tier: 'enterprise' }
+    metadata: { ticket_count: 12 }
   },
   {
     id: 'evt-007',
@@ -77,7 +77,7 @@ export const SEED_TIMELINE: TimelineEvent[] = [
     source: 'sentry',
     type: 'error_spike',
     title: 'Errors returned to baseline',
-    description: 'Error rate dropped from 65/min back to 0.3/min after flag rollback',
+    description: 'Error rate dropped from 65/min to 0.3/min after flag rollback',
     severity: 'info',
     metadata: { error_rate_before: 65, error_rate_after: 0.3 }
   }
@@ -132,8 +132,8 @@ export const SEED_INCIDENTS: Incident[] = [
 
 export const SEED_ANALYSIS: IncidentAnalysis = {
   incidentId: 'inc-001',
-  summary: 'Feature flag "new-upload-flow" triggered a cascade failure in the upload service at 10:02 AM, causing 847 errors in 13 minutes and affecting 12 Enterprise customers representing $35,200 MRR.',
-  root_cause: 'The "new-upload-flow" LaunchDarkly flag enabled a new streaming upload implementation that called .stream() on an undefined file object. The code path was not reached in staging because the flag was only enabled for the Enterprise tier in production. Rolling back the flag at 10:47 AM resolved the issue.',
+  summary: 'Feature flag "new-upload-flow" triggered a cascade failure at 10:02 AM, causing 847 errors in 13 minutes and affecting 12 Enterprise customers representing $35,200 MRR.',
+  root_cause: 'The "new-upload-flow" LaunchDarkly flag enabled a new streaming upload implementation that called .stream() on an undefined file object. The code path was not reached in staging because the flag targeted Enterprise tier only in production. Rolling back the flag at 10:47 AM resolved the issue.',
   affected_customers: SEED_CUSTOMERS,
   mrr_at_risk: 35200,
   support_ticket_count: 8,
@@ -141,22 +141,16 @@ export const SEED_ANALYSIS: IncidentAnalysis = {
   confidence: 'high',
   sources_queried: ['launchdarkly', 'github', 'sentry', 'slack', 'stripe', 'intercom'],
   coral_query: `SELECT
-  ld.flag_name,
-  ld.enabled_at,
-  COUNT(s.error_id) AS error_count,
-  COUNT(DISTINCT st.customer_id) AS affected_customers,
-  SUM(st.mrr) AS mrr_at_risk,
-  COUNT(ic.ticket_id) AS support_tickets
-FROM launchdarkly.flag_evaluations ld
-JOIN sentry.errors s
-  ON s.timestamp BETWEEN ld.enabled_at AND ld.enabled_at + INTERVAL '2 hours'
-JOIN stripe.customers st
-  ON st.id = s.user_id AND st.plan = 'enterprise'
-JOIN intercom.conversations ic
-  ON ic.user_id = s.user_id
-  AND ic.created_at > ld.enabled_at
-WHERE ld.environment = 'production'
-  AND s.error_count > 50
-ORDER BY mrr_at_risk DESC`,
+  ld.name AS flag_name,
+  ld.creation_date AS enabled_at,
+  s.title AS error_title,
+  s.count AS error_count,
+  s.first_seen
+FROM launchdarkly.feature_flags ld
+JOIN sentry.issues s
+  ON s.first_seen > ld.creation_date
+WHERE ld.archived = false
+  AND s.count > 50
+ORDER BY s.count DESC`,
   timeline: SEED_TIMELINE
 };

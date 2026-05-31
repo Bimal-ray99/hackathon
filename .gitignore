@@ -5,3 +5,8 @@ dist/
 .next/
 *.log
 .DS_Store
+.agents
+skills-lock.json
+.env.example
+/docs
+/.claude
