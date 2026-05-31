@@ -72,14 +72,9 @@ const SEED_RESULT: DiagnosisResult = {
 
 // POST /api/diagnosis
 diagnosisRouter.post('/', async (req: Request, res: Response) => {
-  const { flag_key = 'new-upload-flow', seed = true } = req.body as {
+  const { flag_key = 'new-upload-flow' } = req.body as {
     flag_key?: string;
-    seed?: boolean;
   };
-
-  if (seed) {
-    return res.json(SEED_RESULT);
-  }
 
   // Step 1: Coral causal JOIN to find the commit deployed with this flag
   let commitSha = 'a3f9c21';

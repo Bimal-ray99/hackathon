@@ -27,13 +27,7 @@ function scoreLabel(risk: number): string {
 }
 
 // GET /api/churn
-churnRouter.get('/', async (req: Request, res: Response) => {
-  const useSeed = req.query.seed !== 'false';
-
-  if (useSeed) {
-    return res.json(SEED_DATA);
-  }
-
+churnRouter.get('/', async (_req: Request, res: Response) => {
   try {
     const rows = await coral.query(
       `SELECT
@@ -54,7 +48,7 @@ churnRouter.get('/', async (req: Request, res: Response) => {
        LIMIT 10`
     );
 
-    if (!rows.length) return res.json(SEED_DATA);
+    if (!rows.length) return res.json([]);
 
     const MAX_ERRORS = Math.max(...rows.map(r => Number((r as Record<string, unknown>).active_errors ?? 0)), 1);
 
@@ -78,6 +72,6 @@ churnRouter.get('/', async (req: Request, res: Response) => {
 
     return res.json(customers);
   } catch {
-    return res.json(SEED_DATA);
+    return res.json([]);
   }
 });

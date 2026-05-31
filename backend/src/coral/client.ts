@@ -3,23 +3,57 @@ import { promisify } from 'util';
 import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { EventEmitter } from 'events';
 import { IncidentAnalysis, Incident, TimelineEvent } from '../types';
 import { TIMELINE_QUERY, HERO_QUERY } from './queries';
 import { SEED_ANALYSIS, SEED_INCIDENTS, SEED_TIMELINE } from '../seed/data';
 
 const execAsync = promisify(exec);
 
+export interface CoralQueryEvent {
+  id: string;
+  timestamp: string;
+  sql: string;
+  source: string;
+  rows: number;
+  duration_ms: number;
+  status: 'ok' | 'error' | 'seed';
+  error?: string;
+}
+
+export const coralActivityBus = new EventEmitter();
+coralActivityBus.setMaxListeners(50);
+
+const RECENT_ACTIVITY: CoralQueryEvent[] = [];
+const MAX_ACTIVITY = 50;
+
+export function getRecentActivity(): CoralQueryEvent[] {
+  return [...RECENT_ACTIVITY];
+}
+
+function inferSource(sql: string): string {
+  const lower = sql.toLowerCase();
+  if (lower.includes('sentry.')) return 'sentry';
+  if (lower.includes('launchdarkly.') || lower.includes('feature_flags')) return 'launchdarkly';
+  if (lower.includes('github.')) return 'github';
+  if (lower.includes('slack.')) return 'slack';
+  if (lower.includes('stripe.')) return 'stripe';
+  if (lower.includes('intercom.')) return 'intercom';
+  return 'coral';
+}
+
+function emit(event: CoralQueryEvent) {
+  RECENT_ACTIVITY.unshift(event);
+  if (RECENT_ACTIVITY.length > MAX_ACTIVITY) RECENT_ACTIVITY.pop();
+  coralActivityBus.emit('query', event);
+}
+
 export class CoralClient {
-  private useSeed: boolean;
-
-  constructor() {
-    this.useSeed = process.env.CORAL_USE_SEED === 'true';
-  }
-
   async query(sql: string): Promise<Record<string, unknown>[]> {
-    if (this.useSeed) return [];
+    const source = inferSource(sql);
+    const start = Date.now();
+    const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-    // Write SQL to temp file to avoid shell escaping issues
     const tmpFile = join(tmpdir(), `coral_${Date.now()}.sql`);
     try {
       writeFileSync(tmpFile, sql, 'utf8');
@@ -28,44 +62,41 @@ export class CoralClient {
       });
       unlinkSync(tmpFile);
 
-      if (!stdout.trim()) return [];
+      if (!stdout.trim()) {
+        emit({ id, timestamp: new Date().toISOString(), sql, source, rows: 0, duration_ms: Date.now() - start, status: 'ok' });
+        return [];
+      }
       try {
         const parsed = JSON.parse(stdout);
-        return Array.isArray(parsed) ? parsed : [parsed];
+        const rows = Array.isArray(parsed) ? parsed : [parsed];
+        emit({ id, timestamp: new Date().toISOString(), sql, source, rows: rows.length, duration_ms: Date.now() - start, status: 'ok' });
+        return rows;
       } catch {
-        return stdout
-          .split('\n')
-          .filter(line => line.trim())
-          .map(line => JSON.parse(line));
+        const rows = stdout.split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
+        emit({ id, timestamp: new Date().toISOString(), sql, source, rows: rows.length, duration_ms: Date.now() - start, status: 'ok' });
+        return rows;
       }
     } catch (error: unknown) {
       try { unlinkSync(tmpFile); } catch { /* ignore */ }
       const msg = error instanceof Error ? error.message : String(error);
+      emit({ id, timestamp: new Date().toISOString(), sql, source, rows: 0, duration_ms: Date.now() - start, status: 'error', error: msg });
       throw new Error(`Coral query failed: ${msg}`);
     }
   }
 
   async runIncidentQuery(incidentId: string): Promise<IncidentAnalysis> {
-    if (this.useSeed) {
-      return { ...SEED_ANALYSIS, incidentId };
-    }
-    try {
-      const rows = await this.query(TIMELINE_QUERY);
-      if (rows.length === 0) return { ...SEED_ANALYSIS, incidentId };
-      return this.mapRowsToAnalysis(incidentId, rows);
-    } catch {
-      return { ...SEED_ANALYSIS, incidentId };
-    }
+    const rows = await this.query(TIMELINE_QUERY);
+    if (rows.length === 0) return { ...SEED_ANALYSIS, incidentId, timeline: [], sources_queried: [] };
+    return this.mapRowsToAnalysis(incidentId, rows);
   }
 
   async getLiveIncidents(): Promise<Incident[]> {
-    if (this.useSeed) return SEED_INCIDENTS;
     try {
       const rows = await this.query(HERO_QUERY);
-      if (rows.length === 0) return SEED_INCIDENTS;
-      return SEED_INCIDENTS; // hero query returns aggregate, not incident list
+      if (rows.length === 0) return [];
+      return []; // hero query returns aggregate, map to incidents when Coral schema is known
     } catch {
-      return SEED_INCIDENTS;
+      return [];
     }
   }
 

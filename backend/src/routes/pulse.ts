@@ -14,85 +14,7 @@ interface PulseInsight {
   live: boolean;
 }
 
-const SEED_INSIGHTS: Omit<PulseInsight, 'id' | 'ts' | 'live'>[] = [
-  {
-    sources: ['sentry', 'launchdarkly'],
-    text: 'Error rate for Enterprise tier spiked 40% — correlates with new-upload-flow flag rollout 8 min ago',
-    severity: 'critical',
-    impact: '+847 errors',
-  },
-  {
-    sources: ['stripe', 'intercom'],
-    text: 'Intercom ticket volume dropped 60% for upload issues — customers stopped reporting, not stopped experiencing',
-    severity: 'warning',
-    impact: '12 silent',
-  },
-  {
-    sources: ['github', 'sentry'],
-    text: 'Commit a3f9c21 (upload-refactor) touched 4 files now appearing in top Sentry stack traces',
-    severity: 'warning',
-    impact: '4 files',
-  },
-  {
-    sources: ['stripe', 'launchdarkly'],
-    text: '$35,200 MRR at risk — all 12 Enterprise accounts are in new-upload-flow rollout segment',
-    severity: 'critical',
-    impact: '$35.2K',
-  },
-  {
-    sources: ['github', 'launchdarkly'],
-    text: 'Flag new-upload-flow enabled on same deploy as PR #847 — 3 min separation, high correlation',
-    severity: 'info',
-    impact: '3m delta',
-  },
-  {
-    sources: ['sentry', 'stripe'],
-    text: 'Acme Corp error rate 3× baseline — $8,400/mo at risk, no Intercom tickets filed (customer gave up)',
-    severity: 'warning',
-    impact: '$8.4K',
-  },
-  {
-    sources: ['launchdarkly', 'sentry'],
-    text: 'auth-latency-fix flag active for 3 customers — zero correlated Sentry errors. Clean rollout signal',
-    severity: 'info',
-    impact: '0 errors',
-  },
-  {
-    sources: ['github', 'stripe'],
-    text: 'PR #891 (dashboard-v2) deployed last week — $12K MRR in pilot cohort, Sentry error count flat',
-    severity: 'info',
-    impact: '+$12K',
-  },
-  {
-    sources: ['intercom', 'stripe'],
-    text: 'Globex Inc opened 4 tickets in past hour — $6,200 MRR customer, no flag rollback yet initiated',
-    severity: 'warning',
-    impact: '4 tickets',
-  },
-  {
-    sources: ['sentry', 'github'],
-    text: 'Stack trace fingerprint matches 2 open issues from March outage — same code path, new-upload-flow',
-    severity: 'critical',
-    impact: 'repeat bug',
-  },
-];
-
-let seedIndex = 0;
 let liveQueryIndex = 0;
-
-function makeSeedInsight(): PulseInsight {
-  const s = SEED_INSIGHTS[seedIndex % SEED_INSIGHTS.length];
-  seedIndex++;
-  return {
-    id: `pulse-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    ts: new Date().toISOString(),
-    sources: s.sources,
-    text: s.text,
-    severity: s.severity,
-    impact: s.impact,
-    live: false,
-  };
-}
 
 // Returns null when Coral has no data (live-only mode should skip)
 async function makeLiveInsight(): Promise<PulseInsight | null> {
@@ -179,10 +101,8 @@ async function makeLiveInsight(): Promise<PulseInsight | null> {
   return null;
 }
 
-// GET /api/pulse/stream?seed=true|false
+// GET /api/pulse/stream — live Coral only
 pulseRouter.get('/stream', (req: Request, res: Response) => {
-  const useSeed = req.query.seed !== 'false';
-
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -192,17 +112,7 @@ pulseRouter.get('/stream', (req: Request, res: Response) => {
 
   async function emitNext() {
     if (!alive) return;
-    let insight: PulseInsight | null = null;
-
-    if (useSeed) {
-      // Try live first; fall back to seed
-      insight = await makeLiveInsight();
-      if (!insight) insight = makeSeedInsight();
-    } else {
-      insight = await makeLiveInsight();
-      // In live-only mode: no data = no emit
-    }
-
+    const insight = await makeLiveInsight();
     if (insight && alive) {
       res.write(`event: insight\ndata: ${JSON.stringify(insight)}\n\n`);
     }
@@ -221,20 +131,7 @@ pulseRouter.get('/stream', (req: Request, res: Response) => {
   });
 });
 
-// GET /api/pulse/snapshot?seed=true|false — initial backfill
-pulseRouter.get('/snapshot', (req: Request, res: Response) => {
-  const useSeed = req.query.seed !== 'false';
-  if (!useSeed) return res.json([]);
-
-  const now = Date.now();
-  const snapshot = SEED_INSIGHTS.slice(0, 6).map((s, i) => ({
-    id: `snap-${i}`,
-    ts: new Date(now - (6 - i) * 95000).toISOString(),
-    sources: s.sources,
-    text: s.text,
-    severity: s.severity,
-    impact: s.impact,
-    live: false,
-  }));
-  return res.json(snapshot.reverse());
+// GET /api/pulse/snapshot — live backfill only
+pulseRouter.get('/snapshot', (_req: Request, res: Response) => {
+  return res.json([]);
 });

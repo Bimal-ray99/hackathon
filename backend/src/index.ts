@@ -16,6 +16,7 @@ import { diagnosisRouter } from './routes/diagnosis';
 import { churnRouter } from './routes/churn';
 import { noiseRouter } from './routes/noise';
 import { setupMCPServer } from './mcp/server';
+import { coralActivityBus, getRecentActivity, CoralQueryEvent } from './coral/client';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -37,6 +38,25 @@ app.use('/api/churn', churnRouter);
 app.use('/api/noise', noiseRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+// GET /api/coral/activity — SSE stream of live Coral query events
+app.get('/api/coral/activity', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // Send recent history on connect
+  const recent = getRecentActivity();
+  res.write(`event: history\ndata: ${JSON.stringify(recent)}\n\n`);
+
+  const handler = (event: CoralQueryEvent) => {
+    res.write(`event: query\ndata: ${JSON.stringify(event)}\n\n`);
+  };
+
+  coralActivityBus.on('query', handler);
+  req.on('close', () => coralActivityBus.off('query', handler));
+});
 
 app.get('/api/health/coral', async (_req, res) => {
   const { exec } = await import('child_process');

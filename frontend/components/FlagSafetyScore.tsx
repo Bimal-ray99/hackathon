@@ -60,20 +60,19 @@ function ScoreRing({ score, grade }: { score: number; grade: Grade }) {
 
 interface FlagSafetyScoreProps {
   flagKey?: string;
-  seed?: boolean;
 }
 
-export function FlagSafetyScore({ flagKey = 'new-upload-flow', seed = true }: FlagSafetyScoreProps) {
+export function FlagSafetyScore({ flagKey = 'new-upload-flow' }: FlagSafetyScoreProps) {
   const [data, setData] = useState<FlagScore | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${BASE}/api/flags/safety?flag_key=${encodeURIComponent(flagKey)}&seed=${seed}`)
+    fetch(`${BASE}/api/flags/safety?flag_key=${encodeURIComponent(flagKey)}`)
       .then(r => r.json())
       .then(d => { setData(d as FlagScore); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [flagKey, seed]);
+  }, [flagKey]);
 
   if (loading) {
     return (
@@ -96,7 +95,7 @@ export function FlagSafetyScore({ flagKey = 'new-upload-flow', seed = true }: Fl
           <h2 className="text-sm font-semibold text-slate-700">Flag Safety Score</h2>
         </div>
         <span className="text-xs text-slate-400 font-mono">
-          {data.source === 'live' ? 'live Coral data' : 'seed data'}
+live Coral data
         </span>
       </div>
 

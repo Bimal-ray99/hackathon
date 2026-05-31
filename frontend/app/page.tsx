@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   SiGithub, SiSentry, SiSlack, SiStripe, SiIntercom
 } from 'react-icons/si';
-import { TbFlag, TbRadar, TbDatabase, TbDatabaseOff } from 'react-icons/tb';
+import { TbFlag, TbRadar } from 'react-icons/tb';
 import { RiUploadCloud2Line } from 'react-icons/ri';
 import { ChatInterface } from '@/components/ChatInterface';
 import { IncidentTimeline } from '@/components/IncidentTimeline';
@@ -16,6 +16,7 @@ import { FlagSafetyScore } from '@/components/FlagSafetyScore';
 import { OrgPulseFeed } from '@/components/OrgPulseFeed';
 import { DeepDiagnosisPanel } from '@/components/DeepDiagnosisPanel';
 import { SilentChurnPanel } from '@/components/SilentChurnPanel';
+import { CoralActivityPanel } from '@/components/CoralActivityPanel';
 import { AnalysisResponse, AnomalySignal, Incident, TimelineEvent, getIncidents, streamAnalyze, simulateAnomaly } from '@/lib/api';
 
 function extractFlagKey(timeline: TimelineEvent[]): string {
@@ -128,7 +129,6 @@ export default function Home() {
   const [autopilot, setAutopilot] = useState(false);
   const autopilotESRef = useRef<EventSource | null>(null);
   const [autopilotLabel, setAutopilotLabel] = useState<string | null>(null);
-  const [seedEnabled, setSeedEnabled] = useState(true);
   const [coralConnected, setCoralConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -179,7 +179,7 @@ export default function Home() {
       () => {
         setLoading(false);
       },
-      seedEnabled
+      false
     );
   }
 
@@ -277,7 +277,7 @@ export default function Home() {
           setLoading(false);
         },
         () => setLoading(false),
-        seedEnabled
+        false
       );
     } catch {
       setLoading(false);
@@ -361,7 +361,7 @@ export default function Home() {
                   </span>
                   {queried && (
                     <span className={`text-xs font-mono ${isLive ? 'text-emerald-500' : 'text-yellow-500'}`}>
-                      {isLive ? `${result.rows}r` : 'seed'}
+                      {isLive ? `${result.rows}r` : '0r'}
                     </span>
                   )}
                 </div>
@@ -399,25 +399,13 @@ export default function Home() {
                   ? 'bg-red-50 border-red-200 text-red-500'
                   : 'bg-slate-50 border-slate-200 text-slate-400'
               }`}
-              title={coralConnected === true ? 'Coral CLI connected' : coralConnected === false ? 'Coral CLI not found — seed data only' : 'Checking Coral...'}
+              title={coralConnected === true ? 'Coral CLI connected' : coralConnected === false ? 'Coral CLI not found' : 'Checking Coral...'}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${
                 coralConnected === true ? 'bg-emerald-500' : coralConnected === false ? 'bg-red-400' : 'bg-slate-300'
               }`} />
               {coralConnected === true ? 'Coral' : coralConnected === false ? 'Coral Offline' : 'Coral...'}
             </div>
-            <button
-              onClick={() => setSeedEnabled(s => !s)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                seedEnabled
-                  ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
-                  : 'bg-slate-100 border-slate-200 text-slate-500 hover:border-slate-300'
-              }`}
-              title={seedEnabled ? 'Seed data on — click for live only' : 'Live only — click to enable seed fallback'}
-            >
-              {seedEnabled ? <TbDatabase className="w-3.5 h-3.5" /> : <TbDatabaseOff className="w-3.5 h-3.5" />}
-              {seedEnabled ? 'Seed' : 'Live'}
-            </button>
             <button
               onClick={toggleAutopilot}
               disabled={loading}
@@ -470,7 +458,7 @@ export default function Home() {
 
           {/* Org Pulse Feed — always on */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <OrgPulseFeed seedEnabled={seedEnabled} />
+            <OrgPulseFeed />
           </div>
 
           {/* Chat */}
@@ -504,7 +492,7 @@ export default function Home() {
           {/* Flag Safety Score */}
           {analysis && !loading && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <FlagSafetyScore flagKey={extractFlagKey(analysis.timeline)} seed={seedEnabled} />
+              <FlagSafetyScore flagKey={extractFlagKey(analysis.timeline)} />
             </div>
           )}
 
@@ -514,14 +502,13 @@ export default function Home() {
               <DeepDiagnosisPanel
                 flagKey={extractFlagKey(analysis.timeline)}
                 incidentId={analysis.incidentId}
-                seed={seedEnabled}
               />
             </div>
           )}
 
           {/* Silent Churn Detector */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <SilentChurnPanel seedEnabled={seedEnabled} />
+            <SilentChurnPanel />
           </div>
 
           {/* Remediation */}
@@ -568,6 +555,11 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          {/* Coral Activity Log */}
+          <div className="rounded-2xl overflow-hidden border border-slate-800 shadow-sm">
+            <CoralActivityPanel />
+          </div>
 
           {/* Empty state */}
           {!analysis && !loading && (

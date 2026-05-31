@@ -116,7 +116,10 @@ flagsRouter.get('/safety', async (req: Request, res: Response) => {
     // Coral unavailable — fall through to seed
   }
 
-  const data = liveData ?? SEED_FLAG_SAFETY[flagKey] ?? SEED_FLAG_SAFETY['new-upload-flow'];
+  if (!liveData) {
+    return res.status(503).json({ error: 'No Coral data available for this flag' });
+  }
+  const data = liveData;
   const result = computeSafetyScore(data);
 
   return res.json({
@@ -127,14 +130,27 @@ flagsRouter.get('/safety', async (req: Request, res: Response) => {
   });
 });
 
-// GET /api/flags/all-scores — scores all known flags for the sidebar
+// GET /api/flags/all-scores — live scores from Coral
 flagsRouter.get('/all-scores', async (_req: Request, res: Response) => {
-  const scores = await Promise.all(
-    Object.keys(SEED_FLAG_SAFETY).map(async (key) => {
-      const data = SEED_FLAG_SAFETY[key];
-      const result = computeSafetyScore(data);
-      return { flag_key: key, ...result };
-    })
-  );
-  return res.json(scores);
+  try {
+    const flagRows = await coral.query(
+      `SELECT key FROM launchdarkly.feature_flags WHERE project_key = 'default' LIMIT 20`
+    );
+    if (!flagRows.length) return res.json([]);
+
+    const scores = await Promise.all(
+      flagRows.map(async (row) => {
+        const key = String((row as Record<string, unknown>).key ?? '');
+        const errorRows = await coral.query(
+          `SELECT COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved'`
+        ).catch(() => []);
+        const errorCount = Number((errorRows[0] as Record<string, unknown>)?.count ?? 0);
+        const data = { error_count: errorCount, affected_customers: 0, rollback_count: 0, blast_radius_pct: 50 };
+        return { flag_key: key, ...computeSafetyScore(data) };
+      })
+    );
+    return res.json(scores);
+  } catch {
+    return res.json([]);
+  }
 });

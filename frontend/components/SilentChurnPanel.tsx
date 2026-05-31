@@ -15,11 +15,7 @@ interface ChurnCustomer {
   label: string;
 }
 
-interface SilentChurnPanelProps {
-  seedEnabled?: boolean;
-}
-
-export function SilentChurnPanel({ seedEnabled = true }: SilentChurnPanelProps) {
+export function SilentChurnPanel() {
   const [customers, setCustomers] = useState<ChurnCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,11 +23,11 @@ export function SilentChurnPanel({ seedEnabled = true }: SilentChurnPanelProps) 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`${BASE}/api/churn?seed=${seedEnabled}`)
+    fetch(`${BASE}/api/churn`)
       .then(r => r.json())
       .then(data => { setCustomers(data as ChurnCustomer[]); setLoading(false); })
       .catch(() => { setError('Failed to load churn data'); setLoading(false); });
-  }, [seedEnabled]);
+  }, []);
 
   return (
     <div className="space-y-4">

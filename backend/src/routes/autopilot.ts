@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { CoralClient } from '../coral/client';
 import { GeminiAnalyzer } from '../gemini/analyzer';
-import { SEED_ANALYSIS } from '../seed/data';
 
 export const autopilotRouter = Router();
 const coral = new CoralClient();
@@ -84,7 +83,7 @@ async function detectAnomaly(): Promise<{ source: string; signal: string }> {
     // fall through to seed
   }
 
-  return { source: 'sentry', signal: '847 unresolved errors detected (seed)' };
+  return { source: 'sentry', signal: 'No anomaly detected — Coral sources offline' };
 }
 
 async function runAnalysisStream(
@@ -110,10 +109,7 @@ async function runAnalysisStream(
   send('gemini_start', { message: 'Gemini analyzing cross-source data...' });
 
   try {
-    const incidentData = allRows.length > 0
-      ? await coral.runIncidentQuery('inc-001')
-      : { ...SEED_ANALYSIS };
-
+    const incidentData = await coral.runIncidentQuery('inc-001');
     const aiResult = await gemini.analyze(question, incidentData);
 
     send('complete', {
@@ -124,8 +120,12 @@ async function runAnalysisStream(
     });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Analysis failed';
-    send('error', { message: errMsg, fallback: { ...SEED_ANALYSIS, question } });
-    send('complete', { ...SEED_ANALYSIS, question, source_results: sourceResults });
+    send('error', { message: errMsg });
+    send('complete', {
+      incidentId: 'inc-001', summary: 'No data available.', root_cause: '', recommended_action: '',
+      confidence: 'low', mrr_at_risk: 0, affected_customers: 0, support_ticket_count: 0,
+      sources_queried: [], coral_query: '', timeline: [], question, source_results: sourceResults
+    });
   }
 }
 

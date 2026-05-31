@@ -27,7 +27,6 @@ interface DiagnosisResult {
 interface DeepDiagnosisPanelProps {
   flagKey: string;
   incidentId: string;
-  seed?: boolean;
   onPrSha?: (sha: string) => void;
 }
 
@@ -76,7 +75,7 @@ function DiffViewer({ file }: { file: DiagnosisFile }) {
   );
 }
 
-export function DeepDiagnosisPanel({ flagKey, incidentId, seed = true, onPrSha }: DeepDiagnosisPanelProps) {
+export function DeepDiagnosisPanel({ flagKey, incidentId, onPrSha }: DeepDiagnosisPanelProps) {
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +89,7 @@ export function DeepDiagnosisPanel({ flagKey, incidentId, seed = true, onPrSha }
       const res = await fetch(`${BASE}/api/diagnosis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flag_key: flagKey, incident_id: incidentId, seed }),
+        body: JSON.stringify({ flag_key: flagKey, incident_id: incidentId }),
       });
       if (!res.ok) throw new Error('Diagnosis failed');
       setResult(await res.json() as DiagnosisResult);
@@ -170,7 +169,7 @@ export function DeepDiagnosisPanel({ flagKey, incidentId, seed = true, onPrSha }
             </span>
           )}
         </div>
-        <span className="text-xs text-slate-400 font-mono">{result.source === 'live' ? 'live Coral + GitHub' : 'seed data'}</span>
+        <span className="text-xs text-slate-400 font-mono">live Coral + GitHub</span>
       </div>
 
       <div className="rounded-2xl bg-slate-950 border border-slate-800 p-5 space-y-4">

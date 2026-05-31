@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { CoralClient } from '../coral/client';
 import { GeminiAnalyzer } from '../gemini/analyzer';
-import { SEED_ANALYSIS } from '../seed/data';
 
 export const streamRouter = Router();
 const coral = new CoralClient();
@@ -9,31 +8,8 @@ const gemini = new GeminiAnalyzer();
 
 const SOURCES = ['launchdarkly', 'github', 'sentry', 'slack'] as const;
 
-// Seed RAG context injected when Coral unavailable
-const SEED_RAG_CONTEXT = {
-  stackTraces: [
-    { title: "TypeError: Cannot read properties of undefined (reading 'stream')", culprit: 'upload/handler.ts in processUpload' },
-    { title: 'UnhandledPromiseRejection: stream is not defined', culprit: 'upload/chunks.ts in splitChunks' },
-    { title: 'Error: Multipart upload failed: unexpected end of stream', culprit: 'upload/multipart.ts in finalize' },
-  ],
-  slackMessages: [
-    { text: '@oncall upload is broken for enterprise customers, files failing at 10MB+', ts: '2024-05-28T14:40:00Z' },
-    { text: 'new-upload-flow flag was just enabled for 100% Enterprise — timing matches the spike', ts: '2024-05-28T14:38:00Z' },
-    { text: 'sarah.chen deployed upload-refactor 3 minutes before errors started', ts: '2024-05-28T14:37:00Z' },
-  ],
-  flagDetails: [
-    { key: 'new-upload-flow', description: 'Chunked streaming upload implementation for large files (>5MB)' },
-    { key: 'auth-latency-fix', description: 'Token refresh optimization for high-frequency auth' },
-  ],
-  commitMessages: [
-    { message: 'feat: new upload flow with chunked transfer', author: 'sarah.chen' },
-    { message: 'refactor: replace getStream() with stream() in upload handler', author: 'sarah.chen' },
-  ],
-};
-
 streamRouter.get('/', async (req: Request, res: Response) => {
   const question = String(req.query.question || 'Why are there errors?');
-  const useSeed = req.query.seed !== 'false';
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -66,47 +42,30 @@ streamRouter.get('/', async (req: Request, res: Response) => {
   send('gemini_start', { message: 'Gemini analyzing cross-source data...' });
 
   try {
-    const incidentData = allRows.length > 0
-      ? await coral.runIncidentQuery('inc-001')
-      : { ...SEED_ANALYSIS };
+    const incidentData = await coral.runIncidentQuery('inc-001');
 
-    // RAG: fetch rich context in parallel
-    let ragContext = SEED_RAG_CONTEXT;
+    // RAG: fetch rich grounded context from real Coral sources in parallel
+    const [stackRes, slackRes, flagRes, commitRes] = await Promise.allSettled([
+      coral.query(
+        `SELECT title, culprit FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 3`
+      ),
+      coral.query(
+        `SELECT text, ts FROM slack.messages WHERE channel = 'incidents' ORDER BY ts DESC LIMIT 5`
+      ),
+      coral.query(
+        `SELECT key, name, description FROM launchdarkly.feature_flags WHERE project_key = 'default' LIMIT 5`
+      ),
+      coral.query(
+        `SELECT commit__message as message, commit__author__name as author FROM github.commits ORDER BY commit__author__date DESC LIMIT 3`
+      ),
+    ]);
 
-    if (!useSeed) {
-      const [stackRes, slackRes, flagRes, commitRes] = await Promise.allSettled([
-        coral.query(
-          `SELECT title, culprit FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 3`
-        ),
-        coral.query(
-          `SELECT text, ts FROM slack.messages WHERE channel = 'incidents' ORDER BY ts DESC LIMIT 5`
-        ),
-        coral.query(
-          `SELECT key, name, description FROM launchdarkly.feature_flags WHERE project_key = 'default' LIMIT 5`
-        ),
-        coral.query(
-          `SELECT commit__message as message, commit__author__name as author FROM github.commits ORDER BY commit__author__date DESC LIMIT 3`
-        ),
-      ]);
-
-      const stackTraces = stackRes.status === 'fulfilled' && stackRes.value.length > 0
-        ? (stackRes.value as { title: string; culprit: string }[])
-        : SEED_RAG_CONTEXT.stackTraces;
-
-      const slackMessages = slackRes.status === 'fulfilled' && slackRes.value.length > 0
-        ? (slackRes.value as { text: string; ts: string }[])
-        : SEED_RAG_CONTEXT.slackMessages;
-
-      const flagDetails = flagRes.status === 'fulfilled' && flagRes.value.length > 0
-        ? (flagRes.value as { key: string; description: string }[])
-        : SEED_RAG_CONTEXT.flagDetails;
-
-      const commitMessages = commitRes.status === 'fulfilled' && commitRes.value.length > 0
-        ? (commitRes.value as { message: string; author: string }[])
-        : SEED_RAG_CONTEXT.commitMessages;
-
-      ragContext = { stackTraces, slackMessages, flagDetails, commitMessages };
-    }
+    const ragContext = {
+      stackTraces: stackRes.status === 'fulfilled' ? (stackRes.value as { title: string; culprit: string }[]) : [],
+      slackMessages: slackRes.status === 'fulfilled' ? (slackRes.value as { text: string; ts: string }[]) : [],
+      flagDetails: flagRes.status === 'fulfilled' ? (flagRes.value as { key: string; description: string }[]) : [],
+      commitMessages: commitRes.status === 'fulfilled' ? (commitRes.value as { message: string; author: string }[]) : [],
+    };
 
     const aiResult = await gemini.analyze(question, incidentData, ragContext);
 
@@ -118,8 +77,22 @@ streamRouter.get('/', async (req: Request, res: Response) => {
     });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Analysis failed';
-    send('error', { message: errMsg, fallback: { ...SEED_ANALYSIS, question } });
-    send('complete', { ...SEED_ANALYSIS, question, source_results: sourceResults });
+    send('error', { message: errMsg });
+    send('complete', {
+      incidentId: 'inc-001',
+      summary: 'No data available — Coral sources returned no results.',
+      root_cause: 'No data from Coral sources.',
+      recommended_action: 'Connect Coral sources and retry.',
+      confidence: 'low',
+      mrr_at_risk: 0,
+      affected_customers: 0,
+      support_ticket_count: 0,
+      sources_queried: [],
+      coral_query: '',
+      timeline: [],
+      question,
+      source_results: sourceResults
+    });
   }
 
   res.end();

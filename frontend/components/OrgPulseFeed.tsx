@@ -40,10 +40,6 @@ function timeAgo(ts: string): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-interface OrgPulseFeedProps {
-  seedEnabled?: boolean;
-}
-
 interface NoiseScore {
   alert_id: string;
   title: string;
@@ -66,25 +62,24 @@ function matchScore(text: string, scores: NoiseScore[]): NoiseScore | null {
   return null;
 }
 
-export function OrgPulseFeed({ seedEnabled = true }: OrgPulseFeedProps) {
+export function OrgPulseFeed() {
   const [insights, setInsights] = useState<PulseInsight[]>([]);
   const [noiseScores, setNoiseScores] = useState<NoiseScore[]>([]);
   const [connected, setConnected] = useState(false);
   const [, setTick] = useState(0);
   const esRef = useRef<EventSource | null>(null);
-  const prevSeedRef = useRef<boolean>(seedEnabled);
 
-  function connect(seed: boolean) {
+  function connect() {
     esRef.current?.close();
     setInsights([]);
     setConnected(false);
 
-    fetch(`${BASE}/api/pulse/snapshot?seed=${seed}`)
+    fetch(`${BASE}/api/pulse/snapshot`)
       .then(r => r.json())
       .then((data: PulseInsight[]) => setInsights(data))
       .catch(() => {});
 
-    const es = new EventSource(`${BASE}/api/pulse/stream?seed=${seed}`);
+    const es = new EventSource(`${BASE}/api/pulse/stream`);
     esRef.current = es;
 
     es.addEventListener('insight', (e: MessageEvent) => {
@@ -97,7 +92,7 @@ export function OrgPulseFeed({ seedEnabled = true }: OrgPulseFeedProps) {
   }
 
   useEffect(() => {
-    connect(seedEnabled);
+    connect();
     const tick = setInterval(() => setTick(t => t + 1), 30000);
     return () => {
       esRef.current?.close();
@@ -107,19 +102,11 @@ export function OrgPulseFeed({ seedEnabled = true }: OrgPulseFeedProps) {
   }, []);
 
   useEffect(() => {
-    fetch(`${BASE}/api/noise/scores?seed=${seedEnabled}`)
+    fetch(`${BASE}/api/noise/scores`)
       .then(r => r.json())
       .then(data => setNoiseScores(data as NoiseScore[]))
       .catch(() => {});
-  }, [seedEnabled]);
-
-  useEffect(() => {
-    if (prevSeedRef.current !== seedEnabled) {
-      prevSeedRef.current = seedEnabled;
-      connect(seedEnabled);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedEnabled]);
+  }, []);
 
   return (
     <div className="space-y-3">
@@ -131,7 +118,7 @@ export function OrgPulseFeed({ seedEnabled = true }: OrgPulseFeedProps) {
         <div className="flex items-center gap-1.5">
           <TbWifi className={`w-3.5 h-3.5 ${connected ? 'text-emerald-500' : 'text-slate-400'}`} />
           <span className="text-xs text-slate-400">
-            {connected ? (seedEnabled ? 'live · seed fallback' : 'live · Coral only') : 'connecting...'}
+            {connected ? 'live · Coral only' : 'connecting...'}
           </span>
         </div>
       </div>
@@ -141,7 +128,7 @@ export function OrgPulseFeed({ seedEnabled = true }: OrgPulseFeedProps) {
           <div className="flex items-center gap-2 p-3">
             <span className="w-3.5 h-3.5 border-2 border-slate-600 border-t-blue-500 rounded-full animate-spin shrink-0" />
             <span className="text-xs text-slate-500">
-              {seedEnabled ? 'Waiting for first signal...' : 'Waiting for live Coral data...'}
+              Waiting for live Coral data...
             </span>
           </div>
         )}
