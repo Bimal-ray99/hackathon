@@ -180,27 +180,32 @@ const SEED_PR_REVIEW = {
   summary: 'Fix correctly targets all four root causes identified in Sentry. No regressions detected in the legacy upload path. Safe to merge after SRE sign-off.',
 };
 
-const SYSTEM_PROMPT = `You are PulseIQ, an SRE intelligence AI. Analyze cross-source incident data from Coral SQL JOINs.
+const SYSTEM_PROMPT = `You are PulseIQ, an SRE intelligence AI. Your job is to DIRECTLY ANSWER the specific question asked using only the cross-source data provided.
+
+IMPORTANT: Read the question carefully first. Your entire response must be shaped around answering that exact question. Do not give a generic summary — address what was specifically asked.
 
 Respond with valid JSON matching this EXACT schema:
 {
-  "summary": "One sentence: what broke, which flag, which service",
-  "root_cause": "2-3 sentences citing exact Sentry error text and flag key",
-  "recommended_action": "structured steps — see format below",
+  "summary": "One sentence directly answering the question — what specifically broke in relation to what was asked",
+  "root_cause": "2-3 sentences that directly answer the question, citing exact Sentry error text and flag key",
+  "recommended_action": "structured steps addressing the specific question",
   "fix_steps": [
-    { "step": 1, "action": "short action title", "detail": "specific detail citing exact artifact names" }
+    { "step": 1, "action": "short action title", "detail": "specific detail citing exact artifact names from the data" }
   ],
   "who_caused": "author name from commit data, or 'unknown' if no commit data",
   "source_commit": "commit message verbatim, or 'not available'",
-  "affected_component": "service/file name from error data",
+  "affected_component": "service/file name from error data most relevant to the question",
   "confidence": "high" | "medium" | "low"
 }
 
 Rules:
 - fix_steps must have exactly 3 items
-- Every detail field must cite exact error text, flag key, or commit message from the data
-- who_caused comes from GitHub commit author in the data
-- affected_component comes from the Sentry project name`;
+- Every detail field must cite exact error text, flag key, or commit message from the provided data — never invent
+- who_caused comes from GitHub commit author
+- affected_component comes from the Sentry project name most relevant to the question
+- If question asks about a specific error type (e.g. "why are uploads failing"), focus fix_steps on that specific error class
+- If question asks about customer impact, lead with MRR / customer data
+- confidence is "high" only when multiple sources corroborate the same root cause`;
 
 export class GeminiAnalyzer {
   private genAI: GoogleGenerativeAI | null;
@@ -225,7 +230,15 @@ export class GeminiAnalyzer {
   }> {
     if (this.useSeed || !this.genAI) {
       if (ragContext && ragContext.stackTraces.length > 0) {
-        const topError = ragContext.stackTraces[0];
+        // Pick error most relevant to question
+        const qLow = question.toLowerCase();
+        const qWords = qLow.split(/\W+/).filter(w => w.length > 3);
+        const scored = ragContext.stackTraces.map(t => ({
+          t,
+          score: qWords.filter(w => t.title.toLowerCase().includes(w)).length,
+        }));
+        scored.sort((a, b) => b.score - a.score);
+        const topError = scored[0]?.t ?? ragContext.stackTraces[0];
         const flagKey = ragContext.flagDetails[0]?.key ?? 'unknown flag';
         const commit = ragContext.commitMessages[0];
         return {
@@ -257,18 +270,29 @@ export class GeminiAnalyzer {
 
     const model = this.genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.4 }
     });
 
     const timelineSummary = data.timeline
       .map(e => `[${e.source.toUpperCase()}] ${e.timestamp}: ${e.title} — ${e.description}`)
       .join('\n');
 
-    const ragSection = ragContext ? `
-CORAL RAG DATA (cite these rows directly — do not invent):
+    // Filter RAG context to errors most relevant to the question
+    const qLower = question.toLowerCase();
+    const questionKeywords = qLower.split(/\W+/).filter(w => w.length > 3);
+    const relevantTraces = ragContext
+      ? [...ragContext.stackTraces].sort((a, b) => {
+          const aScore = questionKeywords.filter(k => a.title.toLowerCase().includes(k)).length;
+          const bScore = questionKeywords.filter(k => b.title.toLowerCase().includes(k)).length;
+          return bScore - aScore;
+        })
+      : [];
 
-SENTRY ERRORS:
-${ragContext.stackTraces.map(r => `  • [${r.level ?? 'error'}] "${r.title}" (project: ${r.project ?? 'unknown'})`).join('\n')}
+    const ragSection = ragContext ? `
+CORAL RAG DATA (cite these rows directly — never invent data not listed here):
+
+SENTRY ERRORS (ranked by relevance to question):
+${relevantTraces.map((r, i) => `  ${i + 1}. [${r.level ?? 'error'}] "${r.title}" (project: ${r.project ?? 'unknown'})`).join('\n')}
 
 LAUNCHDARKLY FLAGS:
 ${ragContext.flagDetails.map(r => `  • key="${r.key}" name="${r.name ?? ''}" description="${r.description ?? ''}"`).join('\n')}
@@ -282,11 +306,14 @@ ${ragContext.slackMessages.map(r => `  • "${r.text}"`).join('\n') || '  (none)
 
     const prompt = `${SYSTEM_PROMPT}
 
+QUESTION TO ANSWER: "${question}"
+
 ${ragSection}
-Question: "${question}"
-Sources: ${data.sources_queried.join(', ')}
-Timeline (${data.timeline.length} events):
-${timelineSummary}`;
+Sources connected: ${data.sources_queried.join(', ')}
+Timeline (${data.timeline.length} events — most recent first):
+${timelineSummary}
+
+REMINDER: Your response must directly answer "${question}" — do not give a generic incident summary.`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();

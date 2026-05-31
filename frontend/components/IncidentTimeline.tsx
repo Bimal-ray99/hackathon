@@ -44,15 +44,17 @@ const TYPE_COLOR: Record<string, string> = {
 
 function formatTime(iso: string) {
   try {
-    return new Date(iso).toLocaleTimeString('en-US', {
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-    });
-  } catch { return iso; }
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—:—:—';
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  } catch { return '—:—:—'; }
 }
 
 function formatDate(iso: string) {
   try {
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return 'unknown';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   } catch { return ''; }
 }
 

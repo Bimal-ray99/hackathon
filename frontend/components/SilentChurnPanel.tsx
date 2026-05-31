@@ -94,7 +94,7 @@ export function SilentChurnPanel() {
 
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Churn risk</span>
+                  <span className="text-black-500">Churn risk</span>
                   <span className={`font-bold tabular-nums ${c.risk >= 70 ? 'text-red-400' : c.risk >= 30 ? 'text-yellow-400' : 'text-emerald-400'}`}>{c.risk}/100</span>
                 </div>
                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">

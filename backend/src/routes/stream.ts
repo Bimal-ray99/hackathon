@@ -98,15 +98,25 @@ streamRouter.get('/', async (req: Request, res: Response) => {
         severity,
       };
     });
-    const ldTimeline = (ldFlags as Record<string,unknown>[]).map((r, i) => ({
-      id: String(sentryTimeline.length + i + 1),
-      timestamp: String(r.creation_date ?? new Date().toISOString()),
-      source: 'launchdarkly' as const,
-      type: 'flag_change' as const,
-      title: String(r.key ?? ''),
-      description: `flag "${r.key}" active in production`,
-      severity: 'info' as const,
-    }));
+    const ldTimeline = (ldFlags as Record<string,unknown>[])
+      .filter(r => {
+        const key = String(r.key ?? '');
+        return !key.startsWith('ld-example') && !key.startsWith('ld-');
+      })
+      .map((r, i) => {
+        const rawTs = String(r.creation_date ?? '');
+        const parsed = rawTs ? new Date(rawTs) : null;
+        const timestamp = parsed && !isNaN(parsed.getTime()) ? parsed.toISOString() : new Date().toISOString();
+        return {
+          id: String(sentryTimeline.length + i + 1),
+          timestamp,
+          source: 'launchdarkly' as const,
+          type: 'flag_change' as const,
+          title: String(r.key ?? ''),
+          description: `flag "${r.key}" enabled in production`,
+          severity: 'info' as const,
+        };
+      });
     const timeline = [...sentryTimeline, ...ldTimeline].sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
