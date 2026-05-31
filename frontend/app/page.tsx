@@ -129,9 +129,22 @@ export default function Home() {
   const autopilotESRef = useRef<EventSource | null>(null);
   const [autopilotLabel, setAutopilotLabel] = useState<string | null>(null);
   const [seedEnabled, setSeedEnabled] = useState(true);
+  const [coralConnected, setCoralConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     getIncidents().then(setIncidents).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const checkCoral = () => {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/health/coral`)
+        .then(r => r.json())
+        .then((d: { connected: boolean }) => setCoralConnected(d.connected))
+        .catch(() => setCoralConnected(false));
+    };
+    checkCoral();
+    const interval = setInterval(checkCoral, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -377,6 +390,22 @@ export default function Home() {
             )}
           </div>
           <div className="flex items-center gap-3">
+            {/* Coral connection status */}
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold border ${
+                coralConnected === true
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                  : coralConnected === false
+                  ? 'bg-red-50 border-red-200 text-red-500'
+                  : 'bg-slate-50 border-slate-200 text-slate-400'
+              }`}
+              title={coralConnected === true ? 'Coral CLI connected' : coralConnected === false ? 'Coral CLI not found — seed data only' : 'Checking Coral...'}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                coralConnected === true ? 'bg-emerald-500' : coralConnected === false ? 'bg-red-400' : 'bg-slate-300'
+              }`} />
+              {coralConnected === true ? 'Coral' : coralConnected === false ? 'Coral Offline' : 'Coral...'}
+            </div>
             <button
               onClick={() => setSeedEnabled(s => !s)}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
