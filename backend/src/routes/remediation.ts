@@ -35,7 +35,7 @@ remediationRouter.post('/github-pr', async (req: Request, res: Response) => {
       body: JSON.stringify({
         title: title || 'fix: revert breaking change (PulseIQ auto-remediation)',
         body,
-        head: head || baseBranch,
+        head: head || process.env.GITHUB_HEAD_BRANCH || 'fix/revert-upload-bug',
         base: baseBranch,
         draft: true,
       }),
