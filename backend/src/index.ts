@@ -65,8 +65,17 @@ app.get('/api/health/coral', async (_req, res) => {
   try {
     const { stdout } = await execAsync('coral --version', { timeout: 5000 });
     res.json({ connected: true, mode: 'live', version: stdout.trim() });
-  } catch {
-    res.json({ connected: false, mode: 'offline' });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[health/coral] coral not found:', msg);
+    // Try to find where coral is installed
+    execAsync('which coral || command -v coral || echo "not found"', { timeout: 3000 })
+      .then(r => console.log('[health/coral] which coral:', r.stdout.trim()))
+      .catch(() => {});
+    execAsync('echo $PATH', { timeout: 3000 })
+      .then(r => console.log('[health/coral] PATH:', r.stdout.trim()))
+      .catch(() => {});
+    res.json({ connected: false, mode: 'offline', error: msg });
   }
 });
 

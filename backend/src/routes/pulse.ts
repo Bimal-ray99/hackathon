@@ -28,6 +28,7 @@ async function makeLiveInsight(): Promise<PulseInsight | null> {
         `SELECT COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved'`
       );
       const count = Number((rows[0] as Record<string, unknown>)?.count ?? 0);
+      console.log('[pulse] sentry count rows:', JSON.stringify(rows), 'parsed count:', count);
       if (count > 0) {
         return {
           id: `live-${Date.now()}`,
