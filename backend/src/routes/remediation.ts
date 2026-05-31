@@ -44,6 +44,33 @@ remediationRouter.post('/github-pr', async (req: Request, res: Response) => {
     const data = await response.json() as Record<string, unknown>;
 
     if (!response.ok) {
+      // PR already exists for this head branch — find and return it
+      const isAlreadyExists = response.status === 422 &&
+        JSON.stringify(data).toLowerCase().includes('pull request already exists');
+
+      if (isAlreadyExists) {
+        const headBranch = head || process.env.GITHUB_HEAD_BRANCH || 'fix/revert-upload-bug';
+        const listRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/pulls?head=${owner}:${headBranch}&state=open`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          }
+        );
+        const existing = await listRes.json() as Record<string, unknown>[];
+        if (Array.isArray(existing) && existing.length > 0) {
+          return res.json({
+            success: true,
+            pr_url: existing[0].html_url,
+            pr_number: existing[0].number,
+            already_existed: true,
+          });
+        }
+      }
+
       return res.status(response.status).json({
         error: 'GitHub API error',
         details: data
