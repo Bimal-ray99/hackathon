@@ -84,17 +84,6 @@ A polling loop runs on `GET /api/autopilot/stream`. Every 15s it queries `sentry
 
 All three remediation steps run in parallel. When done, it emits `remediation_complete` on the SSE stream with timing data.
 
-### MCP server
-
-Mounted at `/mcp` using `@modelcontextprotocol/sdk` with `StreamableHTTPServerTransport`. Two tools registered:
-
-- `query_incident_status` — runs Coral queries for active Sentry issues + LD flag state, returns `{ active_incidents, flags_at_risk, mrr_at_risk }`
-- `run_coral_analysis` — maps a natural language question to a SQL template, executes via `CoralClient`, returns `{ rows, query, sources }`
-
-Any MCP-compatible host (Claude Desktop, Cursor) can add `http://localhost:4000/mcp` as a server and get live production incident data without writing any integration code.
-
----
-
 ## The demo flow
 
 1. The victim service (`pulseiq-victim-service`) runs a real Express app with a LaunchDarkly flag wired to 5 error classes in Sentry
@@ -184,11 +173,6 @@ Every SQL query that ran — source, SQL text, row count, duration. Shows exactl
 
 **Autopilot**
 Polls Coral every 15s. On anomaly: runs full analysis, then in parallel disables the flag, opens a revert PR, posts to Slack. UI shows "Auto-remediated in 47s" when done.
-
-**MCP Server**
-PulseIQ exposes two tools at `/mcp` via the Model Context Protocol SDK:
-- `query_incident_status` — returns active incidents, at-risk flags, MRR at risk
-- `run_coral_analysis` — runs a Coral query from a natural language question
 
 Any MCP-compatible agent (Claude Desktop, Cursor) can call these directly.
 
