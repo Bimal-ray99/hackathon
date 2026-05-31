@@ -12,10 +12,10 @@ import { ImpactCard } from '@/components/ImpactCard';
 import { QueryViewer } from '@/components/QueryViewer';
 import { CausalChainGraph } from '@/components/CausalChainGraph';
 import { RemediationPanel } from '@/components/RemediationPanel';
-import { FlagSafetyScore } from '@/components/FlagSafetyScore';
+// import { FlagSafetyScore } from '@/components/FlagSafetyScore';
 import { OrgPulseFeed } from '@/components/OrgPulseFeed';
 import { DeepDiagnosisPanel } from '@/components/DeepDiagnosisPanel';
-import { SilentChurnPanel } from '@/components/SilentChurnPanel';
+// import { SilentChurnPanel } from '@/components/SilentChurnPanel';
 import { CoralActivityPanel } from '@/components/CoralActivityPanel';
 import { AnalysisResponse, AnomalySignal, Incident, TimelineEvent, getIncidents, streamAnalyze, simulateAnomaly } from '@/lib/api';
 
@@ -489,12 +489,13 @@ export default function Home() {
             </div>
           )}
 
-          {/* Flag Safety Score */}
+          {/* Flag Safety Score — commented out
           {analysis && !loading && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <FlagSafetyScore flagKey={extractFlagKey(analysis.timeline)} />
             </div>
           )}
+          */}
 
           {/* Deep Diagnosis */}
           {analysis && !loading && (
@@ -506,10 +507,11 @@ export default function Home() {
             </div>
           )}
 
-          {/* Silent Churn Detector */}
+          {/* Silent Churn Detector — commented out
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <SilentChurnPanel />
           </div>
+          */}
 
           {/* Remediation */}
           {analysis && !loading && (
