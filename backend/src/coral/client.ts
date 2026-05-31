@@ -4,9 +4,8 @@ import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { EventEmitter } from 'events';
-import { IncidentAnalysis, Incident, TimelineEvent } from '../types';
-import { TIMELINE_QUERY, HERO_QUERY } from './queries';
-import { SEED_ANALYSIS, SEED_INCIDENTS, SEED_TIMELINE } from '../seed/data';
+import { IncidentAnalysis, Incident, TimelineEvent, AffectedCustomer } from '../types';
+import { TIMELINE_QUERY } from './queries';
 
 const execAsync = promisify(exec);
 
@@ -48,6 +47,53 @@ function emit(event: CoralQueryEvent) {
   coralActivityBus.emit('query', event);
 }
 
+// Parse coral table output: "| col1 | col2 |" rows → array of objects
+function parseCoralOutput(stdout: string): Record<string, unknown>[] {
+  if (!stdout.trim()) return [];
+
+  // Try JSON first (some coral versions support it)
+  try {
+    const parsed = JSON.parse(stdout.trim());
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch { /* not JSON, try table */ }
+
+  // Try NDJSON (one JSON object per line)
+  const lines = stdout.trim().split('\n').filter(l => l.trim());
+  if (lines[0]?.trim().startsWith('{')) {
+    try {
+      return lines.map(l => JSON.parse(l));
+    } catch { /* not NDJSON */ }
+  }
+
+  // Parse pipe-separated table: | col | col |
+  const tableLines = lines.filter(l => l.includes('|'));
+  if (tableLines.length < 2) return [];
+
+  // First pipe line = headers
+  const headers = tableLines[0]
+    .split('|')
+    .map(h => h.trim())
+    .filter(h => h.length > 0);
+
+  if (headers.length === 0) return [];
+
+  // Skip separator lines (contain only dashes/pluses)
+  const dataLines = tableLines.slice(1).filter(l => !/^[\s|+\-]+$/.test(l));
+
+  return dataLines.map(line => {
+    const values = line
+      .split('|')
+      .map(v => v.trim())
+      .filter((_, i, arr) => i > 0 && i < arr.length - 1); // strip first/last empty
+    const obj: Record<string, unknown> = {};
+    headers.forEach((h, i) => {
+      const val = values[i] ?? '';
+      obj[h] = isNaN(Number(val)) || val === '' ? val : Number(val);
+    });
+    return obj;
+  });
+}
+
 export class CoralClient {
   async query(sql: string): Promise<Record<string, unknown>[]> {
     const source = inferSource(sql);
@@ -57,25 +103,12 @@ export class CoralClient {
     const tmpFile = join(tmpdir(), `coral_${Date.now()}.sql`);
     try {
       writeFileSync(tmpFile, sql, 'utf8');
-      const { stdout } = await execAsync(`coral sql --format json --file "${tmpFile}"`, {
-        timeout: 30000
-      });
+      const { stdout } = await execAsync(`coral sql --file "${tmpFile}"`, { timeout: 30000 });
       unlinkSync(tmpFile);
 
-      if (!stdout.trim()) {
-        emit({ id, timestamp: new Date().toISOString(), sql, source, rows: 0, duration_ms: Date.now() - start, status: 'ok' });
-        return [];
-      }
-      try {
-        const parsed = JSON.parse(stdout);
-        const rows = Array.isArray(parsed) ? parsed : [parsed];
-        emit({ id, timestamp: new Date().toISOString(), sql, source, rows: rows.length, duration_ms: Date.now() - start, status: 'ok' });
-        return rows;
-      } catch {
-        const rows = stdout.split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
-        emit({ id, timestamp: new Date().toISOString(), sql, source, rows: rows.length, duration_ms: Date.now() - start, status: 'ok' });
-        return rows;
-      }
+      const rows = parseCoralOutput(stdout);
+      emit({ id, timestamp: new Date().toISOString(), sql, source, rows: rows.length, duration_ms: Date.now() - start, status: 'ok' });
+      return rows;
     } catch (error: unknown) {
       try { unlinkSync(tmpFile); } catch { /* ignore */ }
       const msg = error instanceof Error ? error.message : String(error);
@@ -86,15 +119,33 @@ export class CoralClient {
 
   async runIncidentQuery(incidentId: string): Promise<IncidentAnalysis> {
     const rows = await this.query(TIMELINE_QUERY);
-    if (rows.length === 0) return { ...SEED_ANALYSIS, incidentId, timeline: [], sources_queried: [] };
     return this.mapRowsToAnalysis(incidentId, rows);
   }
 
   async getLiveIncidents(): Promise<Incident[]> {
     try {
-      const rows = await this.query(HERO_QUERY);
+      const rows = await this.query(
+        `SELECT id, title, status, first_seen, last_seen, count
+         FROM sentry.issues
+         WHERE status = 'unresolved'
+         ORDER BY first_seen DESC
+         LIMIT 10`
+      );
       if (rows.length === 0) return [];
-      return []; // hero query returns aggregate, map to incidents when Coral schema is known
+
+      return rows.map((r, i) => {
+        const row = r as Record<string, unknown>;
+        const timesSeenNum = Number(row.count ?? 1);
+        return {
+          id: `sentry-${String(row.id ?? i + 1)}`,
+          title: String(row.title ?? 'Unknown error'),
+          status: 'active' as const,
+          severity: (timesSeenNum > 100 ? 'P0' : timesSeenNum > 20 ? 'P1' : 'P2') as 'P0' | 'P1' | 'P2',
+          started_at: String(row.first_seen ?? new Date().toISOString()),
+          mrr_at_risk: 0,
+          affected_customers: 0,
+        } satisfies Incident;
+      });
     } catch {
       return [];
     }
@@ -145,10 +196,16 @@ export class CoralClient {
     const sources_queried = Array.from(new Set(rows.map(r => String(r.source))));
 
     return {
-      ...SEED_ANALYSIS,
       incidentId,
-      timeline: timeline.length > 0 ? timeline : SEED_TIMELINE,
-      sources_queried: sources_queried.length > 0 ? sources_queried : SEED_ANALYSIS.sources_queried,
+      summary: '',
+      root_cause: '',
+      recommended_action: '',
+      confidence: 'low' as const,
+      mrr_at_risk: 0,
+      affected_customers: [] as AffectedCustomer[],
+      support_ticket_count: 0,
+      timeline,
+      sources_queried,
       coral_query: TIMELINE_QUERY
     };
   }

@@ -116,10 +116,7 @@ flagsRouter.get('/safety', async (req: Request, res: Response) => {
     // Coral unavailable — fall through to seed
   }
 
-  if (!liveData) {
-    return res.status(503).json({ error: 'No Coral data available for this flag' });
-  }
-  const data = liveData;
+  const data = liveData ?? { error_count: 0, affected_customers: 0, rollback_count: 0, blast_radius_pct: 0 };
   const result = computeSafetyScore(data);
 
   return res.json({

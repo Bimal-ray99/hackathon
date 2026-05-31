@@ -178,8 +178,7 @@ export default function Home() {
       },
       () => {
         setLoading(false);
-      },
-      false
+      }
     );
   }
 
@@ -276,8 +275,7 @@ export default function Home() {
           setAnalysis(result);
           setLoading(false);
         },
-        () => setLoading(false),
-        false
+        () => setLoading(false)
       );
     } catch {
       setLoading(false);
@@ -377,8 +375,10 @@ export default function Home() {
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200 px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span className="text-xs text-slate-500 font-medium">Live · all sources connected</span>
+            <div className={`w-2 h-2 rounded-full ${coralConnected === true ? 'bg-emerald-400' : coralConnected === false ? 'bg-red-400' : 'bg-slate-300'}`} />
+            <span className="text-xs text-slate-500 font-medium">
+              {coralConnected === true ? 'Live · Coral connected' : coralConnected === false ? 'Coral offline' : 'Connecting...'}
+            </span>
             {autopilot && (
               <button
                 onClick={handleSimulate}

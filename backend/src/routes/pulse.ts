@@ -22,7 +22,8 @@ async function makeLiveInsight(): Promise<PulseInsight | null> {
   liveQueryIndex++;
 
   try {
-    if (qi === 0) {
+    // Always try sentry first — most reliable source for live incidents
+    {
       const rows = await coral.query(
         `SELECT COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved'`
       );
