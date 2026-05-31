@@ -537,6 +537,7 @@ export default function Home() {
                 <QueryViewer
                   sql={analysis.coral_query}
                   sources={analysis.sources_queried}
+                  queries_run={analysis.queries_run}
                 />
                 <div className="text-xs text-slate-400 space-y-2 pt-3 border-t border-slate-100">
                   <div className="flex justify-between items-center">

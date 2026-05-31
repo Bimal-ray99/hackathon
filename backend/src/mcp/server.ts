@@ -76,7 +76,7 @@ export function setupMCPServer(app: Express) {
         const queryMap: Record<string, string> = {
           error: `SELECT title, level, COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved' GROUP BY title, level ORDER BY count DESC LIMIT 5`,
           flag: `SELECT key, name, description FROM launchdarkly.feature_flags WHERE project_key = 'default' LIMIT 10`,
-          commit: `SELECT commit__message as message, commit__author__name as author, commit__author__date as date FROM github.commits ORDER BY commit__author__date DESC LIMIT 5`,
+          commit: `SELECT commit__message as message, commit__author__name as author, commit__author__date as date FROM github.commits WHERE owner = 'Bimal-ray99' AND repo = 'pulseiq-victim-service' ORDER BY commit__author__date DESC LIMIT 5`,
           customer: `SELECT id, name, mrr, plan FROM stripe.customers WHERE plan = 'enterprise' ORDER BY mrr DESC LIMIT 5`,
           ticket: `SELECT subject, status, created_at FROM intercom.tickets ORDER BY created_at DESC LIMIT 5`,
         };

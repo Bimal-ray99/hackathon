@@ -31,6 +31,7 @@ export interface AnalysisResponse {
   coral_query: string;
   timeline: TimelineEvent[];
   question: string;
+  queries_run?: { source: string; sql: string; rows: number; duration_ms: number; status: string }[];
 }
 
 export interface Incident {

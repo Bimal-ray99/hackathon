@@ -203,7 +203,7 @@ export class CoralClient {
     const queries: Record<string, string> = {
       launchdarkly: `SELECT name AS title, creation_date AS timestamp, 'launchdarkly' AS source FROM launchdarkly.feature_flags WHERE project_key = 'default' ORDER BY creation_date DESC LIMIT 5`,
       sentry: `SELECT title, first_seen AS timestamp, 'sentry' AS source FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 5`,
-      github: `SELECT commit__message AS title, commit__author__date AS timestamp, 'github' AS source FROM github.commits ORDER BY commit__author__date DESC LIMIT 5`,
+      github: `SELECT commit__message AS title, commit__author__date AS timestamp, 'github' AS source FROM github.commits WHERE owner = 'Bimal-ray99' AND repo = 'pulseiq-victim-service' ORDER BY commit__author__date DESC LIMIT 5`,
       slack: `SELECT text AS title, ts AS timestamp, 'slack' AS source FROM slack.messages WHERE channel = 'incidents' LIMIT 5`,
     };
 

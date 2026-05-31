@@ -67,7 +67,7 @@ async function makeLiveInsight(): Promise<PulseInsight | null> {
     if (qi === 2) {
       // GitHub latest commit
       const rows = await coral.query(
-        `SELECT commit__message as message, commit__author__name as author FROM github.commits ORDER BY commit__author__date DESC LIMIT 1`
+        `SELECT commit__message as message, commit__author__name as author FROM github.commits WHERE owner = 'Bimal-ray99' AND repo = 'pulseiq-victim-service' ORDER BY commit__author__date DESC LIMIT 1`
       );
       if (rows.length > 0) {
         const c = rows[0] as Record<string, unknown>;

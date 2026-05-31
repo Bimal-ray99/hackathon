@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { CoralClient } from '../coral/client';
+import { CoralClient, getRecentActivity } from '../coral/client';
 import { GeminiAnalyzer } from '../gemini/analyzer';
 
 export const streamRouter = Router();
@@ -21,6 +21,7 @@ streamRouter.get('/', async (req: Request, res: Response) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  const analysisStart = Date.now();
   send('start', { message: 'Starting Coral JOINs...', sources: SOURCES });
 
   const allRows: Record<string, unknown>[] = [];
@@ -62,7 +63,7 @@ streamRouter.get('/', async (req: Request, res: Response) => {
       coral.query(`SELECT title, level, project, first_seen FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 5`),
       coral.query(`SELECT key, name, creation_date FROM launchdarkly.feature_flags WHERE project_key = 'default' ORDER BY creation_date DESC LIMIT 5`),
       coral.query(`SELECT text, ts FROM slack.messages WHERE channel = 'incidents' ORDER BY ts DESC LIMIT 5`),
-      coral.query(`SELECT commit__message as message, commit__author__name as author, commit__author__date as date FROM github.commits ORDER BY commit__author__date DESC LIMIT 3`),
+      coral.query(`SELECT commit__message as message, commit__author__name as author, commit__author__date as date FROM github.commits WHERE owner = 'Bimal-ray99' AND repo = 'pulseiq-victim-service' ORDER BY commit__author__date DESC LIMIT 3`),
       coral.query(`SELECT 'sentry' AS source, title, level AS description, first_seen AS timestamp FROM sentry.issues ORDER BY first_seen DESC LIMIT 10`),
     ]);
 
@@ -120,11 +121,16 @@ streamRouter.get('/', async (req: Request, res: Response) => {
 
     const aiResult = await gemini.analyze(question, incidentData, ragContext);
 
+    const queriesRun = getRecentActivity()
+      .filter(e => new Date(e.timestamp).getTime() >= analysisStart)
+      .map(e => ({ source: e.source, sql: e.sql, rows: e.rows, duration_ms: e.duration_ms, status: e.status }));
+
     send('complete', {
       ...incidentData,
       ...aiResult,
       question,
-      source_results: sourceResults
+      source_results: sourceResults,
+      queries_run: queriesRun,
     });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Analysis failed';

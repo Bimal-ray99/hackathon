@@ -73,7 +73,7 @@ revenueRouter.get('/commits', async (_req: Request, res: Response) => {
 
   try {
     liveAuthors = await coral.query(
-      `SELECT author, COUNT(*) as commit_count FROM github.commits GROUP BY author LIMIT 10`
+      `SELECT author, COUNT(*) as commit_count FROM github.commits WHERE owner = 'Bimal-ray99' AND repo = 'pulseiq-victim-service' GROUP BY author LIMIT 10`
     );
   } catch { /* seed */ }
 

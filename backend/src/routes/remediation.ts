@@ -49,25 +49,46 @@ remediationRouter.post('/github-pr', async (req: Request, res: Response) => {
         JSON.stringify(data).toLowerCase().includes('pull request already exists');
 
       if (isAlreadyExists) {
+        // PR exists for this branch — create new one with incremented title
+        const baseTitle = title || 'fix: revert breaking change (PulseIQ auto-remediation)';
+        const allPrsRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/pulls?state=open&per_page=50`,
+          { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } }
+        );
+        const allPrs = await allPrsRes.json() as Record<string, unknown>[];
+        // Find highest numeric suffix among PRs with same base title
+        const stripped = baseTitle.replace(/\s*\(\d+\)$/, '');
+        let maxN = 1;
+        if (Array.isArray(allPrs)) {
+          for (const pr of allPrs) {
+            const t = String(pr.title ?? '');
+            if (t.startsWith(stripped)) {
+              const m = t.match(/\((\d+)\)$/);
+              if (m) maxN = Math.max(maxN, parseInt(m[1]));
+              else maxN = Math.max(maxN, 1);
+            }
+          }
+        }
+        const newTitle = `${stripped} (${maxN + 1})`;
+        const newHeadBranch = `${(head || process.env.GITHUB_HEAD_BRANCH || 'fix/revert-upload-bug')}-${maxN + 1}`;
+        const retryRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: newTitle, body, head: newHeadBranch, base: baseBranch, draft: true }),
+        });
+        const retryData = await retryRes.json() as Record<string, unknown>;
+        if (retryRes.ok) {
+          return res.json({ success: true, pr_url: retryData.html_url, pr_number: retryData.number });
+        }
+        // new branch doesn't exist either — fall back to returning the existing PR
         const headBranch = head || process.env.GITHUB_HEAD_BRANCH || 'fix/revert-upload-bug';
         const listRes = await fetch(
           `https://api.github.com/repos/${owner}/${repo}/pulls?head=${owner}:${headBranch}&state=open`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Accept': 'application/vnd.github+json',
-              'X-GitHub-Api-Version': '2022-11-28',
-            },
-          }
+          { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } }
         );
         const existing = await listRes.json() as Record<string, unknown>[];
         if (Array.isArray(existing) && existing.length > 0) {
-          return res.json({
-            success: true,
-            pr_url: existing[0].html_url,
-            pr_number: existing[0].number,
-            already_existed: true,
-          });
+          return res.json({ success: true, pr_url: existing[0].html_url, pr_number: existing[0].number, already_existed: true });
         }
       }
 
