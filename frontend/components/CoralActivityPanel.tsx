@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface CoralQueryEvent {
   id: string;
@@ -46,8 +46,6 @@ export function CoralActivityPanel() {
   const [events, setEvents] = useState<CoralQueryEvent[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
     const es = new EventSource(`${BASE}/api/coral/activity`);
@@ -67,10 +65,6 @@ export function CoralActivityPanel() {
 
     return () => es.close();
   }, []);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [events.length]);
 
   return (
     <div className="bg-[#0d1117] border border-slate-800 rounded-xl overflow-hidden font-mono text-xs">
@@ -146,7 +140,6 @@ export function CoralActivityPanel() {
             })}
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );
