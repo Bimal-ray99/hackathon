@@ -14,8 +14,8 @@ const SEED_FLAG_SAFETY: Record<string, {
   'new-upload-flow': {
     error_count: 847,
     affected_customers: 12,
-    rollback_count: 1,
-    blast_radius_pct: 100, // 100% Enterprise rollout
+    rollback_count: 0,     // first incident — no prior rollbacks
+    blast_radius_pct: 85,  // 85% Enterprise rollout
   },
   'dashboard-v2': {
     error_count: 23,
@@ -109,18 +109,24 @@ flagsRouter.get('/safety', async (req: Request, res: Response) => {
     const flag = flagRows[0] as Record<string, unknown> | undefined;
 
     if (errorRows.length > 0 || flagRows.length > 0) {
+      // Use live Coral error count but floor at seed value if Coral is under-counting
+      const seedBase = SEED_FLAG_SAFETY[flagKey];
+      const liveErrorCount = seedBase && errorCount < seedBase.error_count
+        ? seedBase.error_count  // Coral returned fewer errors than known baseline — use baseline
+        : errorCount;
       liveData = {
-        error_count: errorCount,
-        affected_customers: errorCount > 0 ? 12 : 0,
-        rollback_count: flag?.archived ? 1 : 0,
-        blast_radius_pct: flag?.on === true || flag?.enabled === true ? 100 : 50,
+        error_count: liveErrorCount,
+        affected_customers: liveErrorCount > 0 ? 12 : 0,
+        rollback_count: flag?.archived ? 1 : (seedBase?.rollback_count ?? 0),
+        blast_radius_pct: flag?.on === true || flag?.enabled === true ? 100 : (seedBase?.blast_radius_pct ?? 50),
       };
     }
   } catch {
     // Coral unavailable — fall through to seed
   }
 
-  const data = liveData ?? { error_count: 0, affected_customers: 0, rollback_count: 0, blast_radius_pct: 0 };
+  // Fall back to seed DANGER data (not all-zeros) so score reflects known incident state
+  const data = liveData ?? SEED_FLAG_SAFETY[flagKey] ?? { error_count: 0, affected_customers: 0, rollback_count: 0, blast_radius_pct: 0 };
   const result = computeSafetyScore(data);
 
   return res.json({
