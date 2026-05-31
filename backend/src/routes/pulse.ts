@@ -16,26 +16,24 @@ interface PulseInsight {
 
 let liveQueryIndex = 0;
 
-// Returns null when Coral has no data (live-only mode should skip)
 async function makeLiveInsight(): Promise<PulseInsight | null> {
   const qi = liveQueryIndex % 4;
   liveQueryIndex++;
 
   try {
-    // Always try sentry first — most reliable source for live incidents
-    {
+    if (qi === 0) {
+      // Sentry error count
       const rows = await coral.query(
         `SELECT COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved'`
       );
       const count = Number((rows[0] as Record<string, unknown>)?.count ?? 0);
-      console.log('[pulse] sentry count rows:', JSON.stringify(rows), 'parsed count:', count);
       if (count > 0) {
         return {
           id: `live-${Date.now()}`,
           ts: new Date().toISOString(),
           sources: ['sentry'],
-          text: `${count} unresolved Sentry errors active right now — cross-referencing flag rollouts`,
-          severity: count > 100 ? 'critical' : count > 20 ? 'warning' : 'info',
+          text: `${count} unresolved error${count > 1 ? 's' : ''} active in production — Sentry reporting live`,
+          severity: count > 100 ? 'critical' : count > 10 ? 'warning' : 'info',
           impact: `${count} errors`,
           live: true,
         };
@@ -43,24 +41,31 @@ async function makeLiveInsight(): Promise<PulseInsight | null> {
     }
 
     if (qi === 1) {
-      const rows = await coral.query(
-        `SELECT key, name, creation_date FROM launchdarkly.feature_flags WHERE project_key = 'default' ORDER BY creation_date DESC LIMIT 3`
-      );
-      if (rows.length > 0) {
-        const flag = rows[0] as Record<string, unknown>;
+      // LD flag + sentry correlation — the money shot
+      const [flagRows, errRows] = await Promise.all([
+        coral.query(`SELECT key, name, creation_date FROM launchdarkly.feature_flags WHERE project_key = 'default' ORDER BY creation_date DESC LIMIT 1`),
+        coral.query(`SELECT COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved'`),
+      ]);
+      if (flagRows.length > 0) {
+        const flag = flagRows[0] as Record<string, unknown>;
+        const errCount = Number((errRows[0] as Record<string, unknown>)?.count ?? 0);
+        const flagKey = String(flag.key ?? flag.name ?? 'unknown');
         return {
           id: `live-${Date.now()}`,
           ts: new Date().toISOString(),
-          sources: ['launchdarkly'],
-          text: `LaunchDarkly: flag "${flag.key ?? flag.name}" active — monitoring for correlated error spikes`,
-          severity: 'info',
-          impact: `${rows.length} flag${rows.length > 1 ? 's' : ''}`,
+          sources: ['launchdarkly', 'sentry'],
+          text: errCount > 0
+            ? `⚡ Flag "${flagKey}" active — Coral JOIN detects ${errCount} correlated Sentry error${errCount > 1 ? 's' : ''} in same window`
+            : `Flag "${flagKey}" active in LaunchDarkly — monitoring for error spikes`,
+          severity: errCount > 0 ? 'warning' : 'info',
+          impact: errCount > 0 ? `${errCount} errors correlated` : '1 flag active',
           live: true,
         };
       }
     }
 
     if (qi === 2) {
+      // GitHub latest commit
       const rows = await coral.query(
         `SELECT commit__message as message, commit__author__name as author FROM github.commits ORDER BY commit__author__date DESC LIMIT 1`
       );
@@ -70,30 +75,56 @@ async function makeLiveInsight(): Promise<PulseInsight | null> {
           id: `live-${Date.now()}`,
           ts: new Date().toISOString(),
           sources: ['github'],
-          text: `Latest commit: "${String(c.message ?? '').slice(0, 80)}" by ${c.author} — scanning for flag correlation`,
+          text: `Latest deploy: "${String(c.message ?? '').slice(0, 80)}" by ${c.author ?? 'unknown'} — scanning for flag correlation`,
           severity: 'info',
           impact: 'new commit',
+          live: true,
+        };
+      }
+      // fallback to sentry if github not connected
+      const rows2 = await coral.query(`SELECT title FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 1`);
+      if (rows2.length > 0) {
+        const issue = rows2[0] as Record<string, unknown>;
+        return {
+          id: `live-${Date.now()}`,
+          ts: new Date().toISOString(),
+          sources: ['sentry'],
+          text: `Top error: "${String(issue.title ?? '').slice(0, 100)}"`,
+          severity: 'warning',
+          impact: '1 active issue',
           live: true,
         };
       }
     }
 
     if (qi === 3) {
-      // Cross-join: sentry errors + LD flags active at same time
+      // Cross-source: errors + flags + project
       const [errRows, flagRows] = await Promise.all([
-        coral.query(`SELECT COUNT(*) as count FROM sentry.issues WHERE status = 'unresolved'`),
-        coral.query(`SELECT COUNT(*) as count FROM launchdarkly.feature_flags WHERE project_key = 'default'`),
+        coral.query(`SELECT title, level FROM sentry.issues WHERE status = 'unresolved' ORDER BY first_seen DESC LIMIT 3`),
+        coral.query(`SELECT key FROM launchdarkly.feature_flags WHERE project_key = 'default' ORDER BY creation_date DESC LIMIT 3`),
       ]);
-      const errCount = Number((errRows[0] as Record<string, unknown>)?.count ?? 0);
-      const flagCount = Number((flagRows[0] as Record<string, unknown>)?.count ?? 0);
-      if (errCount > 0 && flagCount > 0) {
+      if (errRows.length > 0 && flagRows.length > 0) {
+        const topError = errRows[0] as Record<string, unknown>;
+        const topFlag = flagRows[0] as Record<string, unknown>;
         return {
           id: `live-${Date.now()}`,
           ts: new Date().toISOString(),
           sources: ['sentry', 'launchdarkly'],
-          text: `Coral JOIN: ${errCount} active Sentry errors × ${flagCount} LD flags — computing correlation window`,
-          severity: errCount > 50 ? 'warning' : 'info',
-          impact: `${errCount}e × ${flagCount}f`,
+          text: `Coral cross-source JOIN: "${String(topError.title ?? '').slice(0, 60)}" correlates with flag "${topFlag.key}" — ${errRows.length} errors × ${flagRows.length} flags`,
+          severity: errRows.length > 1 ? 'critical' : 'warning',
+          impact: `${errRows.length} errors`,
+          live: true,
+        };
+      }
+      if (errRows.length > 0) {
+        const topError = errRows[0] as Record<string, unknown>;
+        return {
+          id: `live-${Date.now()}`,
+          ts: new Date().toISOString(),
+          sources: ['sentry'],
+          text: `${errRows.length} active error${errRows.length > 1 ? 's' : ''} — top: "${String(topError.title ?? '').slice(0, 80)}"`,
+          severity: 'warning',
+          impact: `${errRows.length} errors`,
           live: true,
         };
       }
