@@ -14,6 +14,9 @@ PulseIQ does that correlation in one query. You type a question, it runs SQL JOI
 
 ## Infrastructure
 
+<img width="1693" height="929" alt="image" src="https://github.com/user-attachments/assets/d5e19ce0-b037-4910-8a85-af36dec208eb" />
+
+
 ### How Coral queries actually run
 
 `CoralClient` wraps the Coral CLI. Every query is a shell exec:
