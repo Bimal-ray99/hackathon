@@ -41,18 +41,11 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.get('/api/health/coral', async (_req, res) => {
   const { exec } = await import('child_process');
   const { promisify } = await import('util');
-  const { writeFileSync, unlinkSync } = await import('fs');
-  const { tmpdir } = await import('os');
-  const { join } = await import('path');
   const execAsync = promisify(exec);
-  const tmpFile = join(tmpdir(), `coral_health_${Date.now()}.sql`);
   try {
-    writeFileSync(tmpFile, 'SELECT 1', 'utf8');
-    await execAsync(`coral sql --format json --file "${tmpFile}"`, { timeout: 8000 });
-    try { unlinkSync(tmpFile); } catch { /* ignore */ }
-    res.json({ connected: true, mode: 'live' });
+    const { stdout } = await execAsync('coral --version', { timeout: 5000 });
+    res.json({ connected: true, mode: 'live', version: stdout.trim() });
   } catch {
-    try { unlinkSync(tmpFile); } catch { /* ignore */ }
     res.json({ connected: false, mode: 'offline' });
   }
 });
